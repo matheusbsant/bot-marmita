@@ -1,8 +1,44 @@
+# Environment
 .env
+.env.local
+.env.*.local
+
+# Config (private)
+config/config.json
+*.pem
+*.key
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.spec
 .pytest_cache/
+.tox/
+.eggs/
+
+# Logs
 *.log
 bot.log
 historico_pedidos.txt
-config.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Executável compilado (gerar com pyinstaller)
+# dist/BotMarmita/

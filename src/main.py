@@ -33,15 +33,28 @@ load_dotenv()
 TOKEN      = os.getenv('DISCORD_TOKEN')
 NUMERO_WPP = os.getenv('NUMERO_MARMITA')
 
-BASE_DIR = Path(__file__).parent.parent
+import sys
+if getattr(sys, 'frozen', False):
+    BASE_DIR = Path(sys._MEIPASS)
+else:
+    BASE_DIR = Path(__file__).parent.parent
+
 CONFIG_PATH = BASE_DIR / "config" / "config.json"
-HISTORICO_PATH = BASE_DIR / "historico_pedidos.txt"
+HISTORICO_PATH = Path.home() / "bot_marmita" / "historico_pedidos.txt"
+
+if getattr(sys, 'frozen', False):
+    LOG_DIR = Path.home() / "bot_marmita"
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    LOG_PATH = LOG_DIR / "bot.log"
+else:
+    LOG_PATH = BASE_DIR / "bot.log"
+    LOG_DIR = BASE_DIR
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler(BASE_DIR / "bot.log", encoding="utf-8"),
+        logging.FileHandler(LOG_PATH, encoding="utf-8"),
         logging.StreamHandler()
     ]
 )
