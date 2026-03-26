@@ -105,7 +105,3 @@ O executável será gerado na pasta `dist/`.
 - Python 3.10+
 - Bot do Discord com intents: `message_content`, `members`, `reactions`
 - Permissão "Enviar Mensagens" no canal
-
-## 📝 Licença
-
-Este projeto é para uso interno da Netsul Informática.
