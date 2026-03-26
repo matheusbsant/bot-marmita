@@ -75,9 +75,9 @@ python main.py
 
 ```
 ├── main.py              # Código principal do bot
-├── config.json         # Configurações (NÃO COMMITAR - dados sensíveis)
+├── config.json         # Configurações locais (dados sensíveis)
 ├── config.example.json  # Exemplo de config.json
-├── .env                # Variáveis de ambiente (NÃO COMMITAR)
+├── .env                # Variáveis de ambiente locais
 ├── COMANDOS.md         # Documentação dos comandos
 ├── test_main.py        # Testes unitários
 ├── requirements.txt     # Dependências
