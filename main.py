@@ -61,15 +61,10 @@ def carregar_config() -> dict:
 
 CONFIG = carregar_config()
 PREFERENCIAS_SEM = {int(k): v for k, v in CONFIG.get("preferencias_sem", {}).items()}
+USUARIOS_SERVIDOR = {int(id) for id in CONFIG.get("usuarios_monitoramento", [])}
 LIMITE_MENSAGENS = CONFIG.get("limite_mensagens", 100)
 ENQUETE_DURACAO = CONFIG.get("enquete_duracao_horas", 4)
 TOTAL_MAXIMO = CONFIG.get("total_maximo_marmitas", 200)
-
-USUARIOS_SERVIDOR = {int(id) for id in [
-    1351277760324177971, 342834964812922881, 832963215095758908,
-    319520825491324928, 431998916238508043, 491414904985747456,
-    1053420666453508209, 791771502369308732
-]}
 
 ENQUETES_PENDENTES = {}
 
@@ -399,13 +394,14 @@ async def status_bot(ctx):
 
 @bot.command(aliases=['reload', 'recarregar'])
 async def recarregar_config(ctx):
-    global CONFIG, PREFERENCIAS_SEM, LIMITE_MENSAGENS, ENQUETE_DURACAO, TOTAL_MAXIMO
+    global CONFIG, PREFERENCIAS_SEM, USUARIOS_SERVIDOR, LIMITE_MENSAGENS, ENQUETE_DURACAO, TOTAL_MAXIMO
     
     nova_config = carregar_config()
     nova_preferencias = {int(k): v for k, v in nova_config.get("preferencias_sem", {}).items()}
     
     CONFIG = nova_config
     PREFERENCIAS_SEM = nova_preferencias
+    USUARIOS_SERVIDOR = {int(id) for id in nova_config.get("usuarios_monitoramento", [])}
     LIMITE_MENSAGENS = nova_config.get("limite_mensagens", 100)
     ENQUETE_DURACAO = nova_config.get("enquete_duracao_horas", 4)
     TOTAL_MAXIMO = nova_config.get("total_maximo_marmitas", 200)
