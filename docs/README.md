@@ -1,39 +1,31 @@
-# 🍴 Bot Marmita
+# 🍴 Bot Marmita - Netsul
 
-Sistema automático de pedidos de almoço via Discord com interface gráfica.
+Sistema automático de pedidos de almoço via Discord.
 
-## 📁 Estrutura do Projeto
+## 📋 Funcionalidades
 
-```
-bot-marmita/
-├── src/                    # Código fonte
-│   ├── main.py            # Lógica do bot
-│   ├── bot.py             # Ponto de entrada do bot
-│   ├── interface.py       # Interface gráfica
-│   └── test_main.py       # Testes unitários
-├── config/                 # Configurações
-│   ├── config.json         # Configurações locais (não comitar)
-│   └── config.example.json # Exemplo de configuração
-├── docs/                   # Documentação
-│   ├── README.md
-│   └── COMANDOS.md
-├── dist/                   # Executáveis gerados
-├── .env                    # Variáveis de ambiente (não comitar)
-├── interface.spec           # Configuração PyInstaller
-├── requirements.txt
-└── README.md
+- **Criação de enquetes** - Extrai pratos do cardápio automaticamente (texto entre `*asteriscos*`)
+- **Monitoramento de votos** - Verifica se todos votaram e envia lembretes
+- **Consolidação de pedidos** - Gera pedido formatado para WhatsApp
+- **Restrições alimentares** - Marca pratos conforme preferências dos usuários
+
+## 🚀 Como usar
+
+### 1. Clone o repositório
+
+```bash
+git clone https://github.com/matheusbsant/bot-marmita.git
+cd bot-marmita
 ```
 
-## 🚀 Como Usar
-
-### 1. Configure o `.env`
+### 2. Configure o `.env`
 
 ```env
 DISCORD_TOKEN=seu_token_do_bot
 NUMERO_MARMITA=5511999999999
 ```
 
-### 2. Configure o `config/config.json`
+### 3. Configure o `config.json`
 
 ```json
 {
@@ -56,26 +48,14 @@ NUMERO_MARMITA=5511999999999
 | `enquete_duracao_horas` | Duração da enquete no Discord |
 | `total_maximo_marmitas` | Máximo de marmitas por pedido |
 
-### 3. Execute
-
-**Interface gráfica:**
-```bash
-python src/interface.py
-```
-
-**Ou apenas o bot (via terminal):**
-```bash
-python src/bot.py
-```
-
-### 4. Gere executável
+### 4. Instale e rode
 
 ```bash
-pip install pyinstaller
-pyinstaller interface.spec
+pip install -r requirements.txt
+python main.py
 ```
 
-## 📝 Comandos do Bot
+## 📝 Comandos
 
 | Comando | Descrição |
 |---------|-----------|
@@ -91,12 +71,34 @@ pyinstaller interface.spec
 - Após todos votarem, mensagem de confirmação é enviada
 - O monitoramento para quando `!pedido` é executado
 
+## 📁 Estrutura do Projeto
+
+```
+├── main.py              # Código principal do bot
+├── config.json         # Configurações locais (dados sensíveis)
+├── config.example.json  # Exemplo de config.json
+├── .env                # Variáveis de ambiente locais
+├── COMANDOS.md         # Documentação dos comandos
+├── test_main.py        # Testes unitários
+├── requirements.txt     # Dependências
+└── main.spec          # Configuração PyInstaller
+```
+
 ## 🔧 Dependências
 
 ```
 discord.py>=2.0.0
 python-dotenv>=1.0.0
 ```
+
+## 📦 Gerar Executável
+
+```bash
+pip install pyinstaller
+pyinstaller main.spec --clean
+```
+
+O executável será gerado na pasta `dist/`.
 
 ## ⚙️ Requisitos
 

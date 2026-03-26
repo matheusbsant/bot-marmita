@@ -33,8 +33,8 @@ load_dotenv()
 TOKEN      = os.getenv('DISCORD_TOKEN')
 NUMERO_WPP = os.getenv('NUMERO_MARMITA')
 
-BASE_DIR = Path(__file__).parent
-CONFIG_PATH = BASE_DIR / "config.json"
+BASE_DIR = Path(__file__).parent.parent
+CONFIG_PATH = BASE_DIR / "config" / "config.json"
 HISTORICO_PATH = BASE_DIR / "historico_pedidos.txt"
 
 logging.basicConfig(
