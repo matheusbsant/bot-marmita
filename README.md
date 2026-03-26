@@ -4,36 +4,51 @@ Sistema automático de pedidos de almoço via Discord.
 
 ## 📋 Funcionalidades
 
-- **Criação de enquetes** - Extrai pratos do cardápio automaticamente
+- **Criação de enquetes** - Extrai pratos do cardápio automaticamente (texto entre `*asteriscos*`)
 - **Monitoramento de votos** - Verifica se todos votaram e envia lembretes
 - **Consolidação de pedidos** - Gera pedido formatado para WhatsApp
 - **Restrições alimentares** - Marca pratos conforme preferências dos usuários
 
 ## 🚀 Como usar
 
-### 1. Configuração
+### 1. Clone o repositório
 
-Crie um arquivo `.env` com:
+```bash
+git clone https://github.com/matheusbsant/bot-marmita.git
+cd bot-marmita
+```
+
+### 2. Configure o `.env`
 
 ```env
 DISCORD_TOKEN=seu_token_do_bot
 NUMERO_MARMITA=5511999999999
 ```
 
-### 2. Configurar o `config.json`
+### 3. Configure o `config.json`
 
 ```json
 {
     "preferencias_sem": {
         "ID_USUARIO": "MACARRÃO"
     },
+    "usuarios_monitoramento": [123456789, 987654321],
     "limite_mensagens": 100,
     "enquete_duracao_horas": 4,
     "total_maximo_marmitas": 200
 }
 ```
 
-### 3. Rodar o bot
+**Parâmetros:**
+| Parâmetro | Descrição |
+|-----------|-----------|
+| `preferencias_sem` | Usuários com restrições alimentares (ID → restrição) |
+| `usuarios_monitoramento` | IDs dos usuários para receber lembretes |
+| `limite_mensagens` | Limite de mensagens para buscar votações |
+| `enquete_duracao_horas` | Duração da enquete no Discord |
+| `total_maximo_marmitas` | Máximo de marmitas por pedido |
+
+### 4. Instale e rode
 
 ```bash
 pip install -r requirements.txt
@@ -50,10 +65,6 @@ python main.py
 | `!status` | Status do bot |
 | `!ajuda` | Mostra comandos disponíveis |
 
-## 👥 Usuários Monitorados
-
-O bot monitora 8 usuários para lembretes de votação. Para adicionar/remover, edite a lista `USUARIOS_SERVIDOR` no `main.py`.
-
 ## ⏰ Monitoramento
 
 - Lembrete é enviado após **1 hora** se nem todos votaram
@@ -63,13 +74,14 @@ O bot monitora 8 usuários para lembretes de votação. Para adicionar/remover, 
 ## 📁 Estrutura do Projeto
 
 ```
-├── main.py           # Código principal do bot
-├── config.json      # Configurações (preferências, limites)
-├── .env             # Variáveis de ambiente (TOKEN, WhatsApp)
-├── COMANDOS.md      # Documentação dos comandos
-├── test_main.py     # Testes unitários
-├── requirements.txt  # Dependências
-└── main.spec       # Configuração PyInstaller
+├── main.py              # Código principal do bot
+├── config.json         # Configurações (NÃO COMMITAR - dados sensíveis)
+├── config.example.json  # Exemplo de config.json
+├── .env                # Variáveis de ambiente (NÃO COMMITAR)
+├── COMANDOS.md         # Documentação dos comandos
+├── test_main.py        # Testes unitários
+├── requirements.txt     # Dependências
+└── main.spec          # Configuração PyInstaller
 ```
 
 ## 🔧 Dependências
