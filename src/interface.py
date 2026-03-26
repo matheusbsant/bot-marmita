@@ -1,11 +1,12 @@
 import tkinter as tk
 from tkinter import scrolledtext
-import threading
-import asyncio
+import subprocess
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import main
+import threading
+import queue
+
+LOGOS_IMPORTANTES = ["✅", "❌", "📋", "⚠️", "NETSUL", "erro", "ERRO", "ativo", "ATIVO", "monitoramento"]
 
 class InterfaceBot:
     def __init__(self, root):
@@ -14,16 +15,12 @@ class InterfaceBot:
         self.root.geometry("600x400")
         self.root.resizable(True, True)
         
+        self.processo = None
         self.rodando = False
-        self.loop = None
-        self.thread = None
+        self.fila_logs = queue.Queue()
         
         self.criar_widgets()
-        self.log_original = main.log.info
-        
-        def log_wrapper(msg):
-            self.adicionar_log(msg)
-        main.log.info = log_wrapper
+        self.root.after(100, self.processar_fila)
     
     def criar_widgets(self):
         self.root.protocol("WM_DELETE_WINDOW", self.fechar_janela)
@@ -73,26 +70,68 @@ class InterfaceBot:
         self.label_status.config(text="Status: Rodando", fg="green")
         self.adicionar_log("▶ Iniciando bot...")
         
-        self.thread = threading.Thread(target=self.rodar_bot, daemon=True)
-        self.thread.start()
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        bot_script = os.path.join(base_dir, "src", "bot.py")
+        
+        self.processo = subprocess.Popen(
+            [sys.executable, bot_script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            bufsize=1,
+            cwd=base_dir
+        )
+        
+        threading.Thread(target=self.ler_saida, daemon=True).start()
     
-    def rodar_bot(self):
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
-        self.loop.run_until_complete(main.bot.start(main.TOKEN, reconnect=True))
+    def ler_saida(self):
+        IGNORAR = ["PyNaCl", "davey", "discord.client", "discord.gateway", "Shard ID"]
+        
+        for linha in iter(self.processo.stdout.readline, b''):
+            if not self.rodando:
+                break
+            try:
+                texto = linha.decode('utf-8', errors='replace').strip()
+                if any(p in texto for p in IGNORAR):
+                    continue
+                if any(p in texto for p in LOGOS_IMPORTANTES):
+                    self.fila_logs.put(texto)
+            except:
+                pass
+        if self.processo and self.processo.stdout:
+            self.processo.stdout.close()
+    
+    def processar_fila(self):
+        try:
+            while True:
+                texto = self.fila_logs.get_nowait()
+                self.adicionar_log(texto)
+        except queue.Empty:
+            pass
+        
+        if self.rodando and self.processo and self.processo.poll() is not None:
+            self.adicionar_log("⚠️ Processo encerrou inesperadamente")
+            self.rodando = False
+            self.btn_iniciar.config(state=tk.NORMAL)
+            self.btn_parar.config(state=tk.DISABLED)
+            self.label_status.config(text="Status: Parado", fg="red")
+        
+        self.root.after(100, self.processar_fila)
     
     def parar_bot(self):
         if not self.rodando:
             return
         
         self.adicionar_log("■ Parando bot...")
-        try:
-            if self.loop and self.loop.is_running():
-                asyncio.run_coroutine_threadsafe(main.bot.close(), self.loop)
-        except:
-            pass
-        
         self.rodando = False
+        
+        if self.processo and self.processo.poll() is None:
+            self.processo.terminate()
+            try:
+                self.processo.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.processo.kill()
+        
+        self.processo = None
         self.btn_iniciar.config(state=tk.NORMAL)
         self.btn_parar.config(state=tk.DISABLED)
         self.label_status.config(text="Status: Parado", fg="red")
@@ -100,7 +139,7 @@ class InterfaceBot:
     
     def adicionar_log(self, texto):
         if hasattr(self, 'area_logs'):
-            self.area_logs.insert(tk.END, texto + "\n")
+            self.area_logs.insert(tk.END, str(texto) + "\n")
             self.area_logs.see(tk.END)
     
     def limpar_logs(self):
@@ -108,9 +147,8 @@ class InterfaceBot:
             self.area_logs.delete(1.0, tk.END)
     
     def fechar_janela(self):
-        self.rodando = False
+        self.parar_bot()
         self.root.destroy()
-        import os
         os._exit(0)
 
 
