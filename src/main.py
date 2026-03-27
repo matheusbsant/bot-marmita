@@ -52,9 +52,9 @@ else:
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
+    format="%(message)s",
     handlers=[
-        logging.FileHandler(LOG_PATH, encoding="utf-8"),
+        logging.FileHandler(LOG_PATH, encoding="utf-8", mode='a'),
         logging.StreamHandler()
     ]
 )
@@ -149,6 +149,13 @@ async def on_ready():
     if not verificar_votacao.is_running():
         verificar_votacao.start()
     log.info(f"📋 {len(ENQUETES_PENDENTES)} enquetes pendentes em monitoramento")
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        return
+    raise error
 
 
 @tasks.loop(minutes=1)
