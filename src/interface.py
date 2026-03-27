@@ -6,6 +6,8 @@ import sys
 import threading
 import queue
 
+FROZEN = getattr(sys, 'frozen', False)
+
 LOGOS_IMPORTANTES = ["✅", "❌", "📋", "⚠️", "NETSUL", "erro", "ERRO", "ativo", "ATIVO", "monitoramento"]
 
 class InterfaceBot:
@@ -70,15 +72,25 @@ class InterfaceBot:
         self.label_status.config(text="Status: Rodando", fg="green")
         self.adicionar_log("▶ Iniciando bot...")
         
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        bot_script = os.path.join(base_dir, "src", "bot.py")
+        env = os.environ.copy()
+        env['BOT_MARMITA_MODE'] = 'bot'
+        
+        if FROZEN:
+            base_dir = os.path.dirname(os.path.abspath(sys.executable))
+            exe_path = os.path.join(base_dir, 'BotMarmita.exe')
+            cmd = [exe_path]
+        else:
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            bot_script = os.path.join(base_dir, "src", "bot.py")
+            cmd = [sys.executable, bot_script]
         
         self.processo = subprocess.Popen(
-            [sys.executable, bot_script],
+            cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             bufsize=1,
-            cwd=base_dir
+            cwd=base_dir,
+            env=env
         )
         
         threading.Thread(target=self.ler_saida, daemon=True).start()
@@ -159,4 +171,13 @@ def main_app():
 
 
 if __name__ == "__main__":
-    main_app()
+    modo = os.environ.get('BOT_MARMITA_MODE', '')
+    
+    if modo == 'bot':
+        import main
+        import asyncio
+        asyncio.set_event_loop(asyncio.new_event_loop())
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(main.bot.start(main.TOKEN, reconnect=True))
+    else:
+        main_app()
