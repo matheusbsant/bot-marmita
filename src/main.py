@@ -80,6 +80,7 @@ ENQUETE_DURACAO = CONFIG.get("enquete_duracao_horas", 4)
 TOTAL_MAXIMO = CONFIG.get("total_maximo_marmitas", 200)
 
 ENQUETES_PENDENTES = {}
+LEMBRETES_ENVIADOS = set()
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -160,13 +161,13 @@ async def on_command_error(ctx, error):
 
 @tasks.loop(minutes=1)
 async def verificar_votacao():
+    global LEMBRETES_ENVIADOS
     if not ENQUETES_PENDENTES:
         return
     
     agora = datetime.datetime.now()
     
     canais_processados = set()
-    lembretes_enviados = set()
     
     for msg_id, dados in list(ENQUETES_PENDENTES.items()):
         canal_id = dados['canal_id']
@@ -197,7 +198,7 @@ async def verificar_votacao():
             
             usuarios_nao_votaram = dados['usuarios'] - votos_usuarios
             
-            if tempo_decorrido >= dados['prazo'] and usuarios_nao_votaram and canal_id not in lembretes_enviados:
+            if tempo_decorrido >= dados['prazo'] and usuarios_nao_votaram and canal_id not in LEMBRETES_ENVIADOS:
                 mentions = " ".join(f"<@{uid}>" for uid in usuarios_nao_votaram)
                 verbo = "Vote" if len(usuarios_nao_votaram) == 1 else "Votem"
                 await canal.send(
@@ -206,7 +207,7 @@ async def verificar_votacao():
                     f"⏰ {verbo} agora no cardápio de hoje!"
                 )
                 log.info(f"Lembrete enviado para {len(usuarios_nao_votaram)} usuários no canal {canal.name}")
-                lembretes_enviados.add(canal_id)
+                LEMBRETES_ENVIADOS.add(canal_id)
             
             if usuarios_nao_votaram == set() and votos_usuarios:
                 await canal.send(
@@ -285,6 +286,7 @@ async def almoco(ctx, *, mensagem_copiada: str):
             'usuarios': USUARIOS_SERVIDOR.copy()
         }
     
+    LEMBRETES_ENVIADOS.clear()
     log.info(f"Enquete(s) criada(s) por {ctx.author.name} no servidor {ctx.guild.name} com {len(pratos)} prato(s).")
     await ctx.message.add_reaction("✅")
 
