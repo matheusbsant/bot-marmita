@@ -8,36 +8,36 @@ Sistema automático de pedidos de almoço via Discord com interface gráfica (tk
 bot-marmita/
 ├── src/
 │   ├── main.py            # Lógica do bot
-│   ├── bot.py             # Ponto de entrada do bot
+│   ├── bot.py             # Ponto de entrada do bot (sem interface)
 │   ├── interface.py       # Interface gráfica (tkinter)
 │   └── test_main.py       # Testes unitários
 ├── config/
 │   ├── config.json        # Configurações locais (NÃO COMITAR)
 │   └── config.example.json # Template de configuração
-├── docs/
-│   ├── README.md
-│   └── COMANDOS.md
 ├── dist/
 │   └── BotMarmita/        # Executável gerado
-│       └── BotMarmita.exe
+│       ├── BotMarmita.exe
+│       └── _internal/     # .env e config aqui
 ├── .env                   # Variáveis de ambiente (NÃO COMITAR)
-├── interface.spec         # Configuração PyInstaller
-└── requirements.txt
+└── interface.spec         # Configuração PyInstaller
 ```
 
 ## 🚀 Como Usar
 
 ### Opção 1: Executável (Recomendado)
 
-1. Baixe a pasta `dist/BotMarmita/`
-2. Copie para o local desejado
-3. Edite `.env` e `config/config.json` dentro da pasta `_internal/`
-4. Execute `BotMarmita.exe`
-5. Crie um atalho na área de trabalho se desejar
+Para quem não tem Python instalado.
+
+1. Baixe a pasta `dist/BotMarmita/` completa
+2. Edite `.env` e `config/config.json` dentro da pasta `_internal/`
+3. Execute `BotMarmita.exe`
+4. Crie um atalho na área de trabalho se desejar
 
 **Logs são salvos em:** `C:\Users\SEU_USUARIO\bot_marmita\`
 
-### Opção 2: Código Fonte
+### Opção 2: Direto do Código Fonte
+
+Para desenvolvedores ou quem tem Python 3.10+ instalado.
 
 ```bash
 # Clone o repositório
@@ -47,15 +47,22 @@ cd bot-marmita
 # Instale dependências
 pip install -r requirements.txt
 
-# Configure o .env
+# Configure
 cp config/config.example.json config/config.json
 # Edite config/config.json e .env com seus dados
+```
 
-# Execute
+**Com a interface gráfica:**
+```bash
 python src/interface.py
-# ou
+```
+
+**Sem interface (apenas terminal):**
+```bash
 python src/bot.py
 ```
+
+> 💡 **Dica:** Rodar do código fonte é útil para testar mudanças antes de gerar o executável.
 
 ## ⚙️ Configuração
 
@@ -114,7 +121,7 @@ python-dotenv>=1.0.0
 
 ## 📋 Requisitos
 
-- Python 3.10+
+- Python 3.10+ (apenas para opção 2)
 - Bot do Discord com intents: `message_content`, `members`, `reactions`
 - Permissão "Enviar Mensagens" no canal
 
