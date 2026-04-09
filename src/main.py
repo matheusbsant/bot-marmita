@@ -95,24 +95,66 @@ def validar_numero_whatsapp(numero: Optional[str]) -> Optional[str]:
     return None
 
 
-def limpar_cardapio(texto: str) -> list[str]:
+def limpar_cardapio(texto: str) -> list[dict]:
     pratos_unicos = []
-    
     texto_negrito = re.findall(r'\*([^*]+)\*', texto)
     
-    for negrito in texto_negrito:
-        negrito = negrito.strip()
-        if len(negrito) > 5 and negrito.lower() not in [p.lower() for p in pratos_unicos]:
-            pratos_unicos.append(negrito)
+    linhas = texto.split('\n')
+    
+    for i, negrito in enumerate(texto_negrito):
+        prato_nome = negrito.strip()
+        
+        if len(prato_nome) <= 5:
+            continue
+        if any(p['nome'].lower() == prato_nome.lower() for p in pratos_unicos):
+            continue
+        
+        tem_macarrao = False
+        
+        linha_prato_idx = -1
+        for idx, linha in enumerate(linhas):
+            if f"*{prato_nome}*" in linha or f"*{prato_nome.strip()}*" in linha:
+                linha_prato_idx = idx
+                break
+        
+        if linha_prato_idx == -1:
+            continue
+        
+        tem_conteudo_abaixo = False
+        tem_palavra_macarrao_abaixo = False
+        
+        for j in range(linha_prato_idx + 1, min(linha_prato_idx + 10, len(linhas))):
+            linha_seguinte = linhas[j].strip()
+            
+            if not linha_seguinte:
+                break
+            
+            if linha_seguinte.startswith('*'):
+                break
+            
+            if linha_seguinte and not linha_seguinte.startswith('http'):
+                tem_conteudo_abaixo = True
+                if 'macarrão' in linha_seguinte.lower() or 'macarrao' in linha_seguinte.lower():
+                    tem_palavra_macarrao_abaixo = True
+        
+        if not tem_conteudo_abaixo:
+            tem_macarrao = True
+        elif tem_palavra_macarrao_abaixo:
+            tem_macarrao = True
+        
+        pratos_unicos.append({
+            'nome': prato_nome,
+            'tem_macarrao': tem_macarrao
+        })
     
     return pratos_unicos
 
 
-def montar_linha_prato(prato: str, qtd: int, votos_por_usuario: dict) -> str:
+def montar_linha_prato(prato: str, qtd: int, votos_por_usuario: dict, tem_macarrao: bool = True) -> str:
     usuarios_com_restricao = []
     
     for user_id, restricao in PREFERENCIAS_SEM.items():
-        if prato in votos_por_usuario.get(user_id, []):
+        if prato in votos_por_usuario.get(user_id, []) and tem_macarrao:
             usuarios_com_restricao.append(restricao)
 
     qtd_sem = len(usuarios_com_restricao)
@@ -270,20 +312,24 @@ async def almoco(ctx, *, mensagem_copiada: str):
 
     grupos = [pratos[i:i + 10] for i in range(0, len(pratos), 10)]
     enquetes_criadas = []
+    
     for idx, grupo in enumerate(grupos):
         titulo = f"🍴 Qual o almoço de hoje? (P{idx+1})" if len(grupos) > 1 else "🍴 Qual o almoço de hoje?"
         enquete = discord.Poll(question=titulo, duration=datetime.timedelta(hours=ENQUETE_DURACAO))
         for prato in grupo:
-            enquete.add_answer(text=(prato[:52] + "..") if len(prato) > 55 else prato)
+            enquete.add_answer(text=(prato['nome'][:52] + "..") if len(prato['nome']) > 55 else prato['nome'])
         msg = await canal_alvo.send(poll=enquete)
         enquetes_criadas.append(msg)
+    
+    macarrao_por_disco = {p['nome'].upper(): p['tem_macarrao'] for p in pratos}
     
     for msg in enquetes_criadas:
         ENQUETES_PENDENTES[msg.id] = {
             'canal_id': canal_alvo.id,
             'criado_em': datetime.datetime.now(),
             'prazo': 3600,
-            'usuarios': USUARIOS_SERVIDOR.copy()
+            'usuarios': USUARIOS_SERVIDOR.copy(),
+            'macarrao_por_disco': macarrao_por_disco
         }
     
     LEMBRETES_ENVIADOS.clear()
@@ -324,11 +370,20 @@ async def pedido(ctx):
         await ctx.send(f"⚠️ Total de marmitas ({total_marmitas}) excede o máximo configurado ({TOTAL_MAXIMO})!")
         return
 
-    msg_ids_removidas = [mid for mid, dados in ENQUETES_PENDENTES.items() if dados['canal_id'] == canal_alvo.id]
+    macarrao_por_disco = {}
+    msg_ids_removidas = []
+    for mid, dados in ENQUETES_PENDENTES.items():
+        if dados['canal_id'] == canal_alvo.id:
+            macarrao_por_disco.update(dados.get('macarrao_por_disco', {}))
+            msg_ids_removidas.append(mid)
+    
     for mid in msg_ids_removidas:
         del ENQUETES_PENDENTES[mid]
     
-    lista_formatada = [montar_linha_prato(nome, qtd, votos_por_usuario) for nome, qtd in pedidos_dict.items()]
+    lista_formatada = []
+    for nome, qtd in pedidos_dict.items():
+        tem_macarrao = macarrao_por_disco.get(nome, True)
+        lista_formatada.append(montar_linha_prato(nome, qtd, votos_por_usuario, tem_macarrao))
     
     corpo_pedido = (
         "---------------------------------------------------\n"
