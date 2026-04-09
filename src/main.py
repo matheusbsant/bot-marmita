@@ -78,6 +78,7 @@ USUARIOS_SERVIDOR = {int(id) for id in CONFIG.get("usuarios_monitoramento", [])}
 LIMITE_MENSAGENS = CONFIG.get("limite_mensagens", 100)
 ENQUETE_DURACAO = CONFIG.get("enquete_duracao_horas", 4)
 TOTAL_MAXIMO = CONFIG.get("total_maximo_marmitas", 200)
+SERVER_PRODUCAO_ID = CONFIG.get("servidor_producao_id")
 
 ENQUETES_PENDENTES = {}
 LEMBRETES_ENVIADOS = set()
@@ -397,6 +398,8 @@ async def pedido(ctx):
         "---------------------------------------------------"
     )
 
+    is_producao = ctx.guild.id == SERVER_PRODUCAO_ID
+
     try:
         with open(HISTORICO_PATH, "a", encoding="utf-8") as f:
             f.write(f"\n[{datetime.datetime.now().strftime('%H:%M:%S')}] REGISTRO:\n{corpo_pedido}\n")
@@ -405,17 +408,24 @@ async def pedido(ctx):
         log.error(f"Erro ao salvar arquivo: {e}")
         await ctx.send("⚠️ Erro ao salvar histórico, mas continuando...")
 
-    numero_validado = validar_numero_whatsapp(NUMERO_WPP)
-    if not numero_validado:
-        await ctx.send("⚠️ Número WhatsApp não configurado ou inválido no .env")
-        return
+    if is_producao:
+        log.info(f"Pedido de {total_marmitas} marmita(s) registrado por {ctx.author.name} no servidor {ctx.guild.name}.")
+    else:
+        log.info(f"Pedido de {total_marmitas} marmita(s) registrado por {ctx.author.name} no servidor de TESTE {ctx.guild.name}.")
 
-    texto_url = urllib.parse.quote(corpo_pedido)
-    link_whatsapp = f"https://wa.me/{numero_validado}?text={texto_url}"
+    if is_producao:
+        numero_validado = validar_numero_whatsapp(NUMERO_WPP)
+        if not numero_validado:
+            await ctx.send("⚠️ Número WhatsApp não configurado ou inválido no .env")
+            return
 
-    log.info(f"Pedido de {total_marmitas} marmita(s) registrado por {ctx.author.name} no servidor {ctx.guild.name}.")
-    await ctx.send(f"📊 **Pedido Consolidado!** Total: **{total_marmitas:02d}** marmitas.\n"
-                   f"👉 [CLIQUE PARA ENVIAR NO WHATSAPP]({link_whatsapp})")
+        texto_url = urllib.parse.quote(corpo_pedido)
+        link_whatsapp = f"https://wa.me/{numero_validado}?text={texto_url}"
+        await ctx.send(f"📊 **Pedido Consolidado!** Total: **{total_marmitas:02d}** marmitas.\n"
+                       f"👉 [CLIQUE PARA ENVIAR NO WHATSAPP]({link_whatsapp})")
+    else:
+        await ctx.send(f"📊 **Pedido Consolidado (TESTE)!** Total: **{total_marmitas:02d}** marmitas.\n"
+                       f"_Este pedido não foi salvo no WhatsApp (servidor de testes)._")
 
 
 @bot.command(aliases=['ajuda', 'comandos', 'cmds'])
