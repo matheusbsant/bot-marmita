@@ -15,7 +15,7 @@ a = Analysis(
         (os.path.join(project_root, '.env'), '.'),
         (os.path.join(project_root, 'config'), 'config'),
     ],
-    hiddenimports=['main', 'PIL'],
+    hiddenimports=['main', 'PIL', 'dashboard', 'flask'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

@@ -23,6 +23,14 @@ import json, os, re, datetime, urllib.parse, logging
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
+import threading
+
+try:
+    import dashboard
+    DASHBOARD_DISPONIVEL = True
+except ImportError:
+    DASHBOARD_DISPONIVEL = False
+    log.warning("Dashboard não disponível (Flask não instalado)")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -186,13 +194,25 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 # ═══════════════════════════════════════════════════════════════════
 @bot.event
 async def on_ready():
+    servidores_info = []
     for guild in bot.guilds:
         log.info(f"✅ SISTEMA NETSUL ATIVO: {bot.user} | Servidor: {guild.name} | ID: {guild.id}")
+        servidores_info.append({'name': guild.name, 'id': guild.id})
+    
     if not reconectar.is_running():
         reconectar.start()
     if not verificar_votacao.is_running():
         verificar_votacao.start()
     log.info(f"📋 {len(ENQUETES_PENDENTES)} enquetes pendentes em monitoramento")
+    
+    if DASHBOARD_DISPONIVEL:
+        try:
+            dashboard.atualizar_status(online=True, servidores=servidores_info)
+            dashboard.atualizar_usuarios_monitorados(list(USUARIOS_SERVIDOR))
+            threading.Thread(target=dashboard.iniciar_dashboard, daemon=True).start()
+            log.info("🌐 Dashboard iniciado em http://localhost:5000")
+        except Exception as e:
+            log.error(f"Erro ao iniciar dashboard: {e}")
 
 
 @bot.event
@@ -200,6 +220,15 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         return
     raise error
+
+
+@bot.event
+async def on_disconnect():
+    if DASHBOARD_DISPONIVEL:
+        try:
+            dashboard.atualizar_status(online=False)
+        except:
+            pass
 
 
 @tasks.loop(minutes=1)
@@ -335,6 +364,16 @@ async def almoco(ctx, *, mensagem_copiada: str):
     
     LEMBRETES_ENVIADOS.clear()
     log.info(f"Enquete(s) criada(s) por {ctx.author.name} no servidor {ctx.guild.name} com {len(pratos)} prato(s).")
+    
+    if DASHBOARD_DISPONIVEL:
+        try:
+            dashboard.atualizar_status(enquetes_pendentes=len(ENQUETES_PENDENTES))
+            dashboard.atualizar_enquetes([p['nome'] for p in pratos])
+            dashboard.atualizar_votos({})
+            dashboard.atualizar_usuarios_votaram([])
+        except:
+            pass
+    
     await ctx.message.add_reaction("✅")
 
 
@@ -380,6 +419,13 @@ async def pedido(ctx):
     
     for mid in msg_ids_removidas:
         del ENQUETES_PENDENTES[mid]
+    
+    if DASHBOARD_DISPONIVEL:
+        try:
+            dashboard.atualizar_status(enquetes_pendentes=len(ENQUETES_PENDENTES), total_votos=total_marmitas, ultimo_pedido=hoje)
+            dashboard.atualizar_votos(pedidos_dict)
+        except:
+            pass
     
     lista_formatada = []
     for nome, qtd in pedidos_dict.items():
