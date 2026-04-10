@@ -194,6 +194,10 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 # ═══════════════════════════════════════════════════════════════════
 @bot.event
 async def on_ready():
+    global ENQUETES_PENDENTES, LEMBRETES_ENVIADOS
+    ENQUETES_PENDENTES.clear()
+    LEMBRETES_ENVIADOS.clear()
+    
     servidores_info = []
     for guild in bot.guilds:
         log.info(f"✅ SISTEMA NETSUL ATIVO: {bot.user} | Servidor: {guild.name} | ID: {guild.id}")
