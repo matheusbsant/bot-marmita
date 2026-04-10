@@ -87,6 +87,7 @@ LIMITE_MENSAGENS = CONFIG.get("limite_mensagens", 100)
 ENQUETE_DURACAO = CONFIG.get("enquete_duracao_horas", 4)
 TOTAL_MAXIMO = CONFIG.get("total_maximo_marmitas", 200)
 SERVER_PRODUCAO_ID = CONFIG.get("servidor_producao_id")
+log.info(f"📋 Config carregado - servidor_producao_id: {SERVER_PRODUCAO_ID}")
 
 ENQUETES_PENDENTES = {}
 LEMBRETES_ENVIADOS = set()
