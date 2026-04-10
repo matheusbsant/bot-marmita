@@ -255,26 +255,43 @@ async def verificar_votacao():
         if not canal or not isinstance(canal, discord.TextChannel):
             continue
         
+        if canal_id in LEMBRETES_ENVIADOS:
+            continue
+        
         try:
-            tempo_criado = dados['criado_em']
-            tempo_decorrido = (agora - tempo_criado).total_seconds()
-            
+            todos_usuarios = set()
             votos_usuarios = set()
+            tempo_decorrido = None
+            todas_enquetes_existem = True
             
             for mid, d in list(ENQUETES_PENDENTES.items()):
                 if d['canal_id'] == canal_id:
+                    todos_usuarios.update(d['usuarios'])
                     try:
                         mensagem = await canal.fetch_message(mid)
                         if mensagem.poll:
                             for answer in mensagem.poll.answers:
                                 async for voter in answer.voters():
                                     votos_usuarios.add(voter.id)
+                        else:
+                            todas_enquetes_existem = False
                     except:
-                        pass
+                        todas_enquetes_existem = False
             
-            usuarios_nao_votaram = dados['usuarios'] - votos_usuarios
+            if not todas_enquetes_existem:
+                for mid in list(ENQUETES_PENDENTES.keys()):
+                    if ENQUETES_PENDENTES[mid]['canal_id'] == canal_id:
+                        del ENQUETES_PENDENTES[mid]
+                continue
             
-            if tempo_decorrido >= dados['prazo'] and usuarios_nao_votaram and canal_id not in LEMBRETES_ENVIADOS:
+            if tempo_decorrido is None:
+                dados_primeira = ENQUETES_PENDENTES.get(msg_id, {})
+                if dados_primeira:
+                    tempo_decorrido = (agora - dados_primeira.get('criado_em', agora)).total_seconds()
+            
+            usuarios_nao_votaram = todos_usuarios - votos_usuarios
+            
+            if tempo_decorrido >= 3600 and usuarios_nao_votaram:
                 mentions = " ".join(f"<@{uid}>" for uid in usuarios_nao_votaram)
                 verbo = "Vote" if len(usuarios_nao_votaram) == 1 else "Votem"
                 await canal.send(
