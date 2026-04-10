@@ -192,11 +192,36 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 # ═══════════════════════════════════════════════════════════════════
 # 6. EVENTOS
 # ═══════════════════════════════════════════════════════════════════
+async def buscar_enquetes_do_dia():
+    data_hoje = datetime.datetime.now().date()
+    
+    for guild in bot.guilds:
+        usuarios_servidor = get_usuarios_servidor(guild.id)
+        
+        for channel in guild.text_channels:
+            try:
+                async for message in channel.history(limit=20):
+                    if message.poll and message.created_at.date() == data_hoje and message.author == bot.user:
+                        msg_id = message.id
+                        if msg_id not in ENQUETES_PENDENTES:
+                            ENQUETES_PENDENTES[msg_id] = {
+                                'canal_id': channel.id,
+                                'guild_id': guild.id,
+                                'criado_em': message.created_at.replace(tzinfo=None),
+                                'prazo': 3600,
+                                'usuarios': usuarios_servidor.copy()
+                            }
+                            log.info(f"📋 Enquete do dia encontrada no canal {channel.name}")
+            except:
+                pass
+
+
 @bot.event
 async def on_ready():
     global ENQUETES_PENDENTES, LEMBRETES_ENVIADOS
-    ENQUETES_PENDENTES.clear()
     LEMBRETES_ENVIADOS.clear()
+    
+    await buscar_enquetes_do_dia()
     
     servidores_info = []
     for guild in bot.guilds:
