@@ -23,14 +23,6 @@ import json, os, re, datetime, urllib.parse, logging
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
-import threading
-
-try:
-    import dashboard
-    DASHBOARD_DISPONIVEL = True
-except ImportError:
-    DASHBOARD_DISPONIVEL = False
-    log.warning("Dashboard não disponível (Flask não instalado)")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -86,8 +78,6 @@ USUARIOS_SERVIDOR = {int(id) for id in CONFIG.get("usuarios_monitoramento", [])}
 LIMITE_MENSAGENS = CONFIG.get("limite_mensagens", 100)
 ENQUETE_DURACAO = CONFIG.get("enquete_duracao_horas", 4)
 TOTAL_MAXIMO = CONFIG.get("total_maximo_marmitas", 200)
-SERVER_PRODUCAO_ID = CONFIG.get("servidor_producao_id")
-log.info(f"📋 Config carregado - servidor_producao_id: {SERVER_PRODUCAO_ID}")
 
 ENQUETES_PENDENTES = {}
 LEMBRETES_ENVIADOS = set()
@@ -193,56 +183,15 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 # ═══════════════════════════════════════════════════════════════════
 # 6. EVENTOS
 # ═══════════════════════════════════════════════════════════════════
-async def buscar_enquetes_do_dia():
-    data_hoje = datetime.datetime.now().date()
-    
-    for guild in bot.guilds:
-        usuarios_servidor = get_usuarios_servidor(guild.id)
-        
-        for channel in guild.text_channels:
-            try:
-                async for message in channel.history(limit=20):
-                    if message.poll and message.created_at.date() == data_hoje and message.author == bot.user:
-                        msg_id = message.id
-                        if msg_id not in ENQUETES_PENDENTES:
-                            ENQUETES_PENDENTES[msg_id] = {
-                                'canal_id': channel.id,
-                                'guild_id': guild.id,
-                                'criado_em': message.created_at.replace(tzinfo=None),
-                                'prazo': 3600,
-                                'usuarios': usuarios_servidor.copy()
-                            }
-                            log.info(f"📋 Enquete do dia encontrada no canal {channel.name}")
-            except:
-                pass
-
-
 @bot.event
 async def on_ready():
-    global ENQUETES_PENDENTES, LEMBRETES_ENVIADOS
-    LEMBRETES_ENVIADOS.clear()
-    
-    await buscar_enquetes_do_dia()
-    
-    servidores_info = []
     for guild in bot.guilds:
         log.info(f"✅ SISTEMA NETSUL ATIVO: {bot.user} | Servidor: {guild.name} | ID: {guild.id}")
-        servidores_info.append({'name': guild.name, 'id': guild.id})
-    
     if not reconectar.is_running():
         reconectar.start()
     if not verificar_votacao.is_running():
         verificar_votacao.start()
     log.info(f"📋 {len(ENQUETES_PENDENTES)} enquetes pendentes em monitoramento")
-    
-    if DASHBOARD_DISPONIVEL:
-        try:
-            dashboard.atualizar_status(online=True, servidores=servidores_info)
-            dashboard.atualizar_usuarios_monitorados(list(USUARIOS_SERVIDOR))
-            threading.Thread(target=dashboard.iniciar_dashboard, daemon=True).start()
-            log.info("🌐 Dashboard iniciado em http://localhost:5000")
-        except Exception as e:
-            log.error(f"Erro ao iniciar dashboard: {e}")
 
 
 @bot.event
@@ -250,15 +199,6 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         return
     raise error
-
-
-@bot.event
-async def on_disconnect():
-    if DASHBOARD_DISPONIVEL:
-        try:
-            dashboard.atualizar_status(online=False)
-        except:
-            pass
 
 
 @tasks.loop(minutes=1)
@@ -281,43 +221,26 @@ async def verificar_votacao():
         if not canal or not isinstance(canal, discord.TextChannel):
             continue
         
-        if canal_id in LEMBRETES_ENVIADOS:
-            continue
-        
         try:
-            todos_usuarios = set()
+            tempo_criado = dados['criado_em']
+            tempo_decorrido = (agora - tempo_criado).total_seconds()
+            
             votos_usuarios = set()
-            tempo_decorrido = None
-            todas_enquetes_existem = True
             
             for mid, d in list(ENQUETES_PENDENTES.items()):
                 if d['canal_id'] == canal_id:
-                    todos_usuarios.update(d['usuarios'])
                     try:
                         mensagem = await canal.fetch_message(mid)
                         if mensagem.poll:
                             for answer in mensagem.poll.answers:
                                 async for voter in answer.voters():
                                     votos_usuarios.add(voter.id)
-                        else:
-                            todas_enquetes_existem = False
                     except:
-                        todas_enquetes_existem = False
+                        pass
             
-            if not todas_enquetes_existem:
-                for mid in list(ENQUETES_PENDENTES.keys()):
-                    if ENQUETES_PENDENTES[mid]['canal_id'] == canal_id:
-                        del ENQUETES_PENDENTES[mid]
-                continue
+            usuarios_nao_votaram = dados['usuarios'] - votos_usuarios
             
-            if tempo_decorrido is None:
-                dados_primeira = ENQUETES_PENDENTES.get(msg_id, {})
-                if dados_primeira:
-                    tempo_decorrido = (agora - dados_primeira.get('criado_em', agora)).total_seconds()
-            
-            usuarios_nao_votaram = todos_usuarios - votos_usuarios
-            
-            if tempo_decorrido >= 3600 and usuarios_nao_votaram:
+            if tempo_decorrido >= dados['prazo'] and usuarios_nao_votaram and canal_id not in LEMBRETES_ENVIADOS:
                 mentions = " ".join(f"<@{uid}>" for uid in usuarios_nao_votaram)
                 verbo = "Vote" if len(usuarios_nao_votaram) == 1 else "Votem"
                 await canal.send(
@@ -411,16 +334,6 @@ async def almoco(ctx, *, mensagem_copiada: str):
     
     LEMBRETES_ENVIADOS.clear()
     log.info(f"Enquete(s) criada(s) por {ctx.author.name} no servidor {ctx.guild.name} com {len(pratos)} prato(s).")
-    
-    if DASHBOARD_DISPONIVEL:
-        try:
-            dashboard.atualizar_status(enquetes_pendentes=len(ENQUETES_PENDENTES))
-            dashboard.atualizar_enquetes([p['nome'] for p in pratos])
-            dashboard.atualizar_votos({})
-            dashboard.atualizar_usuarios_votaram([])
-        except:
-            pass
-    
     await ctx.message.add_reaction("✅")
 
 
@@ -467,13 +380,6 @@ async def pedido(ctx):
     for mid in msg_ids_removidas:
         del ENQUETES_PENDENTES[mid]
     
-    if DASHBOARD_DISPONIVEL:
-        try:
-            dashboard.atualizar_status(enquetes_pendentes=len(ENQUETES_PENDENTES), total_votos=total_marmitas, ultimo_pedido=hoje)
-            dashboard.atualizar_votos(pedidos_dict)
-        except:
-            pass
-    
     lista_formatada = []
     for nome, qtd in pedidos_dict.items():
         tem_macarrao = macarrao_por_disco.get(nome, True)
@@ -491,8 +397,6 @@ async def pedido(ctx):
         "---------------------------------------------------"
     )
 
-    is_producao = ctx.guild.id == SERVER_PRODUCAO_ID
-
     try:
         with open(HISTORICO_PATH, "a", encoding="utf-8") as f:
             f.write(f"\n[{datetime.datetime.now().strftime('%H:%M:%S')}] REGISTRO:\n{corpo_pedido}\n")
@@ -501,24 +405,17 @@ async def pedido(ctx):
         log.error(f"Erro ao salvar arquivo: {e}")
         await ctx.send("⚠️ Erro ao salvar histórico, mas continuando...")
 
-    if is_producao:
-        log.info(f"Pedido de {total_marmitas} marmita(s) registrado por {ctx.author.name} no servidor {ctx.guild.name}.")
-    else:
-        log.info(f"Pedido de {total_marmitas} marmita(s) registrado por {ctx.author.name} no servidor de TESTE {ctx.guild.name}.")
+    numero_validado = validar_numero_whatsapp(NUMERO_WPP)
+    if not numero_validado:
+        await ctx.send("⚠️ Número WhatsApp não configurado ou inválido no .env")
+        return
 
-    if is_producao:
-        numero_validado = validar_numero_whatsapp(NUMERO_WPP)
-        if not numero_validado:
-            await ctx.send("⚠️ Número WhatsApp não configurado ou inválido no .env")
-            return
+    texto_url = urllib.parse.quote(corpo_pedido)
+    link_whatsapp = f"https://wa.me/{numero_validado}?text={texto_url}"
 
-        texto_url = urllib.parse.quote(corpo_pedido)
-        link_whatsapp = f"https://wa.me/{numero_validado}?text={texto_url}"
-        await ctx.send(f"📊 **Pedido Consolidado!** Total: **{total_marmitas:02d}** marmitas.\n"
-                       f"👉 [CLIQUE PARA ENVIAR NO WHATSAPP]({link_whatsapp})")
-    else:
-        await ctx.send(f"📊 **Pedido Consolidado (TESTE)!** Total: **{total_marmitas:02d}** marmitas.\n"
-                       f"_Este pedido não foi salvo no WhatsApp (servidor de testes)._")
+    log.info(f"Pedido de {total_marmitas} marmita(s) registrado por {ctx.author.name} no servidor {ctx.guild.name}.")
+    await ctx.send(f"📊 **Pedido Consolidado!** Total: **{total_marmitas:02d}** marmitas.\n"
+                   f"👉 [CLIQUE PARA ENVIAR NO WHATSAPP]({link_whatsapp})")
 
 
 @bot.command(aliases=['ajuda', 'comandos', 'cmds'])
