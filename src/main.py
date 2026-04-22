@@ -127,7 +127,7 @@ def limpar_cardapio(texto: str) -> list[dict]:
             linha_seguinte = linhas[j].strip()
             
             if not linha_seguinte:
-                break
+                continue
             
             if linha_seguinte.startswith('*'):
                 break
@@ -146,6 +146,8 @@ def limpar_cardapio(texto: str) -> list[dict]:
             'nome': prato_nome,
             'tem_macarrao': tem_macarrao
         })
+    
+    return pratos_unicos
     
     return pratos_unicos
 
@@ -382,7 +384,8 @@ async def pedido(ctx):
     
     lista_formatada = []
     for nome, qtd in pedidos_dict.items():
-        tem_macarrao = macarrao_por_disco.get(nome, True)
+        nome_upper = nome.upper()
+        tem_macarrao = macarrao_por_disco.get(nome_upper, True)
         lista_formatada.append(montar_linha_prato(nome, qtd, votos_por_usuario, tem_macarrao))
     
     corpo_pedido = (
