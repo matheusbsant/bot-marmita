@@ -66,7 +66,7 @@ def carregar_constantes_config() -> tuple[dict, dict, set, int, int, int]:
 
 CONFIG, PREFERENCIAS_SEM, USUARIOS_SERVIDOR, LIMITE_MENSAGENS, ENQUETE_DURACAO, TOTAL_MAXIMO = carregar_constantes_config()
 ENQUETES_PENDENTES = {}
-LEMBRETES_ENVIADOS = set()
+LEMBRETES_ENVIADOS: dict[int, int] = {}
 CARDAPIOS_POR_CANAL = {}
 
 
@@ -199,16 +199,30 @@ async def verificar_votacao():
                         log.warning(f"Não foi possível ler votos da enquete {mid}: {e}")
 
             usuarios_nao_votaram = dados['usuarios'] - votos_usuarios
-            if tempo_decorrido >= dados['prazo'] and usuarios_nao_votaram and canal_id not in LEMBRETES_ENVIADOS:
-                mentions = " ".join(f"<@{uid}>" for uid in usuarios_nao_votaram)
-                verbo = "Vote" if len(usuarios_nao_votaram) == 1 else "Votem"
-                await canal.send(
-                    f"📢 **Lembrete!** Ainda faltam votos!\n"
-                    f"{mentions}\n"
-                    f"⏰ {verbo} agora no cardápio de hoje!"
-                )
-                log.info(f"Lembrete enviado para {len(usuarios_nao_votaram)} usuários no canal {canal.name}")
-                LEMBRETES_ENVIADOS.add(canal_id)
+            nivel_atual = LEMBRETES_ENVIADOS.get(canal_id, 0)
+
+            if usuarios_nao_votaram:
+                if tempo_decorrido >= 1800 and nivel_atual < 1:
+                    mentions = " ".join(f"<@{uid}>" for uid in usuarios_nao_votaram)
+                    verbo = "Vote" if len(usuarios_nao_votaram) == 1 else "Votem"
+                    await canal.send(
+                        f"📢 **Lembrete!** Faltam 30 min para encerrar a votação!\n"
+                        f"{mentions}\n"
+                        f"⏰ {verbo} agora no cardápio de hoje!"
+                    )
+                    log.info(f"1o lembrete (30min) enviado para {len(usuarios_nao_votaram)} usuários no canal {canal.name}")
+                    LEMBRETES_ENVIADOS[canal_id] = 1
+
+                if tempo_decorrido >= dados['prazo'] and nivel_atual < 2:
+                    mentions = " ".join(f"<@{uid}>" for uid in usuarios_nao_votaram)
+                    verbo = "Vote" if len(usuarios_nao_votaram) == 1 else "Votem"
+                    await canal.send(
+                        f"🚨 **ÚLTIMO LEMBRETE!** Ainda faltam votos!\n"
+                        f"{mentions}\n"
+                        f"⏰ {verbo} agora no cardápio de hoje!"
+                    )
+                    log.info(f"2o lembrete (final) enviado para {len(usuarios_nao_votaram)} usuários no canal {canal.name}")
+                    LEMBRETES_ENVIADOS[canal_id] = 2
 
             if usuarios_nao_votaram == set() and votos_usuarios:
                 await canal.send(
