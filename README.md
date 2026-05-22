@@ -10,6 +10,10 @@ bot-marmita/
 │   ├── main.py            # Lógica do bot
 │   ├── bot.py             # Ponto de entrada do bot (sem interface)
 │   ├── interface.py       # Interface gráfica (tkinter)
+│   ├── cardapio.py        # Parser do cardápio
+│   ├── pedido.py          # Formatação do pedido
+│   ├── settings.py        # Configurações e variáveis de ambiente
+│   ├── whatsapp.py        # Links de WhatsApp e cobrança
 │   └── test_main.py       # Testes unitários
 ├── config/
 │   ├── config.json        # Configurações locais (NÃO COMITAR)
@@ -71,7 +75,13 @@ python src/bot.py
 ```env
 DISCORD_TOKEN=seu_token_do_bot_aqui
 NUMERO_MARMITA=5511999999999
+NUMERO_CHEF=5511988887777
+CHAVE_PIX=sua_chave_pix
+NOME_PIX=IARA SANTANA
+VALOR_MARMITA=18
 ```
+
+`NUMERO_CHEF`, `CHAVE_PIX`, `NOME_PIX` e `VALOR_MARMITA` são usados para gerar o link de cobrança por WhatsApp. O link de cobrança só aparece quando `NUMERO_CHEF` é válido e `CHAVE_PIX` está preenchida. Se `VALOR_MARMITA` estiver ausente ou inválido, o bot usa `18`.
 
 ### 2. Arquivo `config/config.json`
 
@@ -101,7 +111,7 @@ NUMERO_MARMITA=5511999999999
 | Comando | Descrição |
 |---------|-----------|
 | `!almoco` | Cria enquete com os pratos do cardápio |
-| `!pedido` | Fecha votação e gera pedido para WhatsApp |
+| `!pedido` | Fecha votação e gera pedido para WhatsApp; também gera cobrança PIX quando configurada |
 | `!pref` | Lista restrições alimentares |
 | `!status` | Status do bot |
 | `!ajuda` | Mostra comandos disponíveis |
@@ -117,6 +127,7 @@ NUMERO_MARMITA=5511999999999
 ```
 discord.py>=2.0.0
 python-dotenv>=1.0.0
+pytest>=7.0.0
 ```
 
 ## 📋 Requisitos
@@ -133,6 +144,8 @@ python -m PyInstaller interface.spec --clean -y
 ```
 
 O executável estará em `dist/BotMarmita/`.
+
+> ⚠️ **Distribuição interna:** o `interface.spec` inclui `.env` e `config/` dentro do pacote gerado para facilitar o uso interno. Não compartilhe esse executável publicamente sem remover ou substituir credenciais e configurações sensíveis.
 
 ## 📄 Licença
 

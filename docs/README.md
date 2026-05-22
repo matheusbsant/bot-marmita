@@ -23,7 +23,13 @@ cd bot-marmita
 ```env
 DISCORD_TOKEN=seu_token_do_bot
 NUMERO_MARMITA=5511999999999
+NUMERO_CHEF=5511988887777
+CHAVE_PIX=sua_chave_pix
+NOME_PIX=IARA SANTANA
+VALOR_MARMITA=18
 ```
+
+As variáveis `NUMERO_CHEF`, `CHAVE_PIX`, `NOME_PIX` e `VALOR_MARMITA` controlam o link opcional de cobrança PIX. A cobrança só é gerada quando `NUMERO_CHEF` é válido e `CHAVE_PIX` está preenchida. Se `VALOR_MARMITA` for inválido, o valor padrão usado é `18`.
 
 ### 3. Configure o `config.json`
 
@@ -52,7 +58,7 @@ NUMERO_MARMITA=5511999999999
 
 ```bash
 pip install -r requirements.txt
-python main.py
+python src/bot.py
 ```
 
 ## 📝 Comandos
@@ -60,7 +66,7 @@ python main.py
 | Comando | Descrição |
 |---------|-----------|
 | `!almoco` | Cria enquete com os pratos do cardápio |
-| `!pedido` | Fecha votação e gera pedido para WhatsApp |
+| `!pedido` | Fecha votação e gera pedido para WhatsApp; gera cobrança PIX quando configurada |
 | `!pref` | Lista restrições alimentares |
 | `!status` | Status do bot |
 | `!ajuda` | Mostra comandos disponíveis |
@@ -74,14 +80,21 @@ python main.py
 ## 📁 Estrutura do Projeto
 
 ```
-├── main.py              # Código principal do bot
-├── config.json         # Configurações locais (dados sensíveis)
-├── config.example.json  # Exemplo de config.json
-├── .env                # Variáveis de ambiente locais
-├── COMANDOS.md         # Documentação dos comandos
-├── test_main.py        # Testes unitários
+├── src/
+│   ├── main.py          # Código principal do bot
+│   ├── bot.py           # Entrada sem interface
+│   ├── interface.py     # Interface gráfica
+│   ├── cardapio.py      # Parser do cardápio
+│   ├── pedido.py        # Formatação do pedido
+│   ├── settings.py      # Configurações e variáveis de ambiente
+│   ├── whatsapp.py      # Links de WhatsApp e cobrança
+│   └── test_main.py     # Testes unitários
+├── config/
+│   ├── config.json      # Configurações locais (dados sensíveis)
+│   └── config.example.json
+├── .env                 # Variáveis de ambiente locais
 ├── requirements.txt     # Dependências
-└── main.spec          # Configuração PyInstaller
+└── interface.spec       # Configuração PyInstaller
 ```
 
 ## 🔧 Dependências
@@ -89,16 +102,19 @@ python main.py
 ```
 discord.py>=2.0.0
 python-dotenv>=1.0.0
+pytest>=7.0.0
 ```
 
 ## 📦 Gerar Executável
 
 ```bash
 pip install pyinstaller
-pyinstaller main.spec --clean
+python -m PyInstaller interface.spec --clean -y
 ```
 
 O executável será gerado na pasta `dist/`.
+
+> ⚠️ O pacote PyInstaller inclui `.env` e `config/` para uso interno. Antes de distribuir fora da equipe, remova ou substitua credenciais e dados sensíveis.
 
 ## ⚙️ Requisitos
 

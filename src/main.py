@@ -3,178 +3,142 @@
 ║              BOT MARMITA - NETSUL                                ║
 ║              Sistema automático de pedidos de almoço             ║
 ╚══════════════════════════════════════════════════════════════════╝
-
-ETAPAS DO CÓDIGO:
-1. IMPORTAÇÕES - Bibliotecas necessárias
-2. CONFIGURAÇÕES - Variáveis de ambiente e logging
-3. CONSTANTES - Listas de palavras a ignorar
-4. FUNÇÕES - Lógica do bot
-5. BOT - Configuração e eventos
-6. COMANDOS - Comandos do Discord
-7. INICIALIZAÇÃO - Execução do bot
 """
+import asyncio
+import datetime
+import logging
+import unicodedata
 
-# ═══════════════════════════════════════════════════════════════════
-# 1. IMPORTAÇÕES
-# ═══════════════════════════════════════════════════════════════════
 import discord
 from discord.ext import commands, tasks
-import json, os, re, datetime, urllib.parse, logging
-from pathlib import Path
-from typing import Optional
-from dotenv import load_dotenv
 
+from cardapio import limpar_cardapio
+from pedido import montar_corpo_pedido, montar_linha_prato as montar_linha_prato_pedido
+from settings import (
+    BASE_DIR,
+    CHAVE_PIX,
+    CONFIG_PATH,
+    HISTORICO_PATH,
+    LOG_PATH,
+    NOME_PIX,
+    NUMERO_CHEF,
+    NUMERO_WPP,
+    TOKEN,
+    VALOR_MARMITA_PADRAO,
+    carregar_config,
+    carregar_valor_marmita,
+    normalizar_config,
+)
+from whatsapp import montar_link_cobranca as montar_link_cobranca_whatsapp
+from whatsapp import montar_link_whatsapp, validar_numero_whatsapp
 
-# ═══════════════════════════════════════════════════════════════════
-# 2. CONFIGURAÇÕES
-# ═══════════════════════════════════════════════════════════════════
-load_dotenv()
-
-TOKEN      = os.getenv('DISCORD_TOKEN')
-NUMERO_WPP = os.getenv('NUMERO_MARMITA')
-
-import sys
-if getattr(sys, 'frozen', False):
-    BASE_DIR = Path(sys._MEIPASS)
-else:
-    BASE_DIR = Path(__file__).parent.parent
-
-CONFIG_PATH = BASE_DIR / "config" / "config.json"
-HISTORICO_PATH = Path.home() / "bot_marmita" / "historico_pedidos.txt"
-
-if getattr(sys, 'frozen', False):
-    LOG_DIR = Path.home() / "bot_marmita"
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    LOG_PATH = LOG_DIR / "bot.log"
-else:
-    LOG_PATH = BASE_DIR / "bot.log"
-    LOG_DIR = BASE_DIR
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(message)s",
     handlers=[
         logging.FileHandler(LOG_PATH, encoding="utf-8", mode='a'),
-        logging.StreamHandler()
-    ]
+        logging.StreamHandler(),
+    ],
 )
 log = logging.getLogger(__name__)
 
 
-# ═══════════════════════════════════════════════════════════════════
-# 3. CONSTANTES (do config.json)
-# ═══════════════════════════════════════════════════════════════════
-def carregar_config() -> dict:
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        log.warning(f"config.json não encontrado ou inválido: {e}")
-        return {}
+def _nfc(text: str) -> str:
+    return unicodedata.normalize('NFC', text)
 
-CONFIG = carregar_config()
-PREFERENCIAS_SEM = {int(k): v for k, v in CONFIG.get("preferencias_sem", {}).items()}
-USUARIOS_SERVIDOR = {int(id) for id in CONFIG.get("usuarios_monitoramento", [])}
-LIMITE_MENSAGENS = CONFIG.get("limite_mensagens", 100)
-ENQUETE_DURACAO = CONFIG.get("enquete_duracao_horas", 4)
-TOTAL_MAXIMO = CONFIG.get("total_maximo_marmitas", 200)
 
+VALOR_MARMITA = carregar_valor_marmita(logger=log)
+
+
+def carregar_constantes_config() -> tuple[dict, dict, set, int, int, int]:
+    config = carregar_config(CONFIG_PATH, logger=log)
+    config_normalizado = normalizar_config(config, logger=log)
+    return (
+        config,
+        config_normalizado["preferencias_sem"],
+        config_normalizado["usuarios_monitoramento"],
+        config_normalizado["limite_mensagens"],
+        config_normalizado["enquete_duracao_horas"],
+        config_normalizado["total_maximo_marmitas"],
+    )
+
+
+CONFIG, PREFERENCIAS_SEM, USUARIOS_SERVIDOR, LIMITE_MENSAGENS, ENQUETE_DURACAO, TOTAL_MAXIMO = carregar_constantes_config()
 ENQUETES_PENDENTES = {}
 LEMBRETES_ENVIADOS = set()
-
-
-# ═══════════════════════════════════════════════════════════════════
-# 4. FUNÇÕES
-# ═══════════════════════════════════════════════════════════════════
-def validar_numero_whatsapp(numero: Optional[str]) -> Optional[str]:
-    if not numero:
-        return None
-    numero_limpo = re.sub(r'\D', '', numero)
-    if len(numero_limpo) >= 10:
-        return numero_limpo
-    return None
-
-
-def limpar_cardapio(texto: str) -> list[dict]:
-    pratos_unicos = []
-    texto_negrito = re.findall(r'\*([^*]+)\*', texto)
-    
-    linhas = texto.split('\n')
-    
-    for i, negrito in enumerate(texto_negrito):
-        prato_nome = negrito.strip()
-        
-        if len(prato_nome) <= 5:
-            continue
-        if any(p['nome'].lower() == prato_nome.lower() for p in pratos_unicos):
-            continue
-        
-        tem_macarrao = False
-        
-        linha_prato_idx = -1
-        for idx, linha in enumerate(linhas):
-            if f"*{prato_nome}*" in linha or f"*{prato_nome.strip()}*" in linha:
-                linha_prato_idx = idx
-                break
-        
-        if linha_prato_idx == -1:
-            continue
-        
-        tem_conteudo_abaixo = False
-        tem_palavra_macarrao_abaixo = False
-        
-        for j in range(linha_prato_idx + 1, min(linha_prato_idx + 10, len(linhas))):
-            linha_seguinte = linhas[j].strip()
-            
-            if not linha_seguinte:
-                continue
-            
-            if linha_seguinte.startswith('*'):
-                break
-            
-            if linha_seguinte and not linha_seguinte.startswith('http'):
-                tem_conteudo_abaixo = True
-                if 'macarrão' in linha_seguinte.lower() or 'macarrao' in linha_seguinte.lower():
-                    tem_palavra_macarrao_abaixo = True
-        
-        if not tem_conteudo_abaixo:
-            tem_macarrao = True
-        elif tem_palavra_macarrao_abaixo:
-            tem_macarrao = True
-        
-        pratos_unicos.append({
-            'nome': prato_nome,
-            'tem_macarrao': tem_macarrao
-        })
-    
-    return pratos_unicos
-    
-    return pratos_unicos
+CARDAPIOS_POR_CANAL = {}
 
 
 def montar_linha_prato(prato: str, qtd: int, votos_por_usuario: dict, tem_macarrao: bool = True) -> str:
-    usuarios_com_restricao = []
-    
-    for user_id, restricao in PREFERENCIAS_SEM.items():
-        if prato in votos_por_usuario.get(user_id, []) and tem_macarrao:
-            usuarios_com_restricao.append(restricao)
-
-    qtd_sem = len(usuarios_com_restricao)
-
-    if qtd_sem == 0:
-        return f"{qtd:02d} {prato}"
-
-    obs_texto = " / ".join(set(usuarios_com_restricao))
-
-    if qtd_sem == qtd:
-        return f"{qtd:02d} {prato} (SEM {obs_texto})"
-    else:
-        return f"{qtd:02d} {prato} ({qtd_sem:02d} SEM {obs_texto})"
+    return montar_linha_prato_pedido(prato, qtd, votos_por_usuario, PREFERENCIAS_SEM, tem_macarrao)
 
 
-# ═══════════════════════════════════════════════════════════════════
-# 5. BOT
-# ═══════════════════════════════════════════════════════════════════
+def montar_link_cobranca(total_marmitas: int) -> str | None:
+    return montar_link_cobranca_whatsapp(
+        total_marmitas=total_marmitas,
+        numero_chef=NUMERO_CHEF,
+        chave_pix=CHAVE_PIX,
+        nome_pix=NOME_PIX,
+        valor_marmita=VALOR_MARMITA,
+        logger=log,
+    )
+
+
+def montar_lista_usuarios(config: dict) -> str:
+    config_normalizado = normalizar_config(config)
+    usuarios = config_normalizado["usuarios_cadastrados"]
+
+    if not usuarios:
+        return "📋 **Usuarios cadastrados:**\nNenhum usuario cadastrado."
+
+    def ordenar(item):
+        user_id, dados = item
+        return str(dados.get("nome") or "").lower(), int(user_id)
+
+    ativos = sorted(
+        [(user_id, dados) for user_id, dados in usuarios.items() if dados.get("monitorar")],
+        key=ordenar,
+    )
+    inativos = sorted(
+        [(user_id, dados) for user_id, dados in usuarios.items() if not dados.get("monitorar")],
+        key=ordenar,
+    )
+
+    def linhas(grupo):
+        if not grupo:
+            return ["- Nenhum"]
+        return [
+            f"- <@{user_id}> - {dados.get('nome') or f'Usuario {user_id}'} (`{user_id}`)"
+            for user_id, dados in grupo
+        ]
+
+    return (
+        "📋 **Usuarios cadastrados:**\n\n"
+        f"✅ **Ativos ({len(ativos)}):**\n"
+        + "\n".join(linhas(ativos))
+        + "\n\n"
+        f"⏸️ **Nao ativos ({len(inativos)}):**\n"
+        + "\n".join(linhas(inativos))
+    )
+
+
+def dividir_mensagem(texto: str, limite: int = 1900) -> list[str]:
+    partes = []
+    parte_atual = ""
+    for linha in texto.splitlines():
+        candidata = linha if not parte_atual else parte_atual + "\n" + linha
+        if len(candidata) > limite:
+            if parte_atual:
+                partes.append(parte_atual)
+            parte_atual = linha
+        else:
+            parte_atual = candidata
+    if parte_atual:
+        partes.append(parte_atual)
+    return partes
+
+
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
@@ -182,9 +146,6 @@ intents.reactions = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 
-# ═══════════════════════════════════════════════════════════════════
-# 6. EVENTOS
-# ═══════════════════════════════════════════════════════════════════
 @bot.event
 async def on_ready():
     for guild in bot.guilds:
@@ -208,27 +169,24 @@ async def verificar_votacao():
     global LEMBRETES_ENVIADOS
     if not ENQUETES_PENDENTES:
         return
-    
+
     agora = datetime.datetime.now()
-    
     canais_processados = set()
-    
+
     for msg_id, dados in list(ENQUETES_PENDENTES.items()):
         canal_id = dados['canal_id']
-        
         if canal_id in canais_processados:
             continue
-        
+
         canal = bot.get_channel(canal_id)
         if not canal or not isinstance(canal, discord.TextChannel):
             continue
-        
+
         try:
             tempo_criado = dados['criado_em']
             tempo_decorrido = (agora - tempo_criado).total_seconds()
-            
             votos_usuarios = set()
-            
+
             for mid, d in list(ENQUETES_PENDENTES.items()):
                 if d['canal_id'] == canal_id:
                     try:
@@ -237,11 +195,10 @@ async def verificar_votacao():
                             for answer in mensagem.poll.answers:
                                 async for voter in answer.voters():
                                     votos_usuarios.add(voter.id)
-                    except:
-                        pass
-            
+                    except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+                        log.warning(f"Não foi possível ler votos da enquete {mid}: {e}")
+
             usuarios_nao_votaram = dados['usuarios'] - votos_usuarios
-            
             if tempo_decorrido >= dados['prazo'] and usuarios_nao_votaram and canal_id not in LEMBRETES_ENVIADOS:
                 mentions = " ".join(f"<@{uid}>" for uid in usuarios_nao_votaram)
                 verbo = "Vote" if len(usuarios_nao_votaram) == 1 else "Votem"
@@ -252,7 +209,7 @@ async def verificar_votacao():
                 )
                 log.info(f"Lembrete enviado para {len(usuarios_nao_votaram)} usuários no canal {canal.name}")
                 LEMBRETES_ENVIADOS.add(canal_id)
-            
+
             if usuarios_nao_votaram == set() and votos_usuarios:
                 await canal.send(
                     f"✅ **Todos votaram!**\n"
@@ -263,7 +220,6 @@ async def verificar_votacao():
                 for mid in list(ENQUETES_PENDENTES.keys()):
                     if ENQUETES_PENDENTES[mid]['canal_id'] == canal_id:
                         del ENQUETES_PENDENTES[mid]
-                
         except Exception as e:
             log.error(f"Erro ao verificar votacao: {e}")
 
@@ -272,6 +228,7 @@ async def verificar_votacao():
 async def reconectar():
     if not bot.is_closed():
         return
+
     log.info("🔄 Tentando reconectar ao Discord...")
     try:
         for handler in log.handlers:
@@ -291,22 +248,19 @@ async def on_error(event, *args, **kwargs):
     log.error(f"Erro no evento {event}: {args}, {kwargs}")
 
 
-# ═══════════════════════════════════════════════════════════════════
-# 7. COMANDOS
-# ═══════════════════════════════════════════════════════════════════
 @bot.command(aliases=['almoço', 'cardapio', 'cardápio'])
 async def almoco(ctx, *, mensagem_copiada: str):
     canal_alvo = ctx.channel
     if not isinstance(canal_alvo, discord.TextChannel):
         await ctx.send("❌ Erro: Canal inválido.")
         return
-    
+
     data_hoje = datetime.datetime.now().date()
     async for msg in canal_alvo.history(limit=5):
         if msg.poll and msg.created_at.date() == data_hoje and msg.author == bot.user:
             await ctx.send("⚠️ Já existe uma enquete de hoje! Use `!fechar` para finalizar.")
             return
-    
+
     pratos = limpar_cardapio(mensagem_copiada)
     if not pratos:
         await ctx.send("🤔 Não identifiquei pratos principais no cardápio.")
@@ -314,7 +268,7 @@ async def almoco(ctx, *, mensagem_copiada: str):
 
     grupos = [pratos[i:i + 10] for i in range(0, len(pratos), 10)]
     enquetes_criadas = []
-    
+
     for idx, grupo in enumerate(grupos):
         titulo = f"🍴 Qual o almoço de hoje? (P{idx+1})" if len(grupos) > 1 else "🍴 Qual o almoço de hoje?"
         enquete = discord.Poll(question=titulo, duration=datetime.timedelta(hours=ENQUETE_DURACAO))
@@ -322,18 +276,19 @@ async def almoco(ctx, *, mensagem_copiada: str):
             enquete.add_answer(text=(prato['nome'][:52] + "..") if len(prato['nome']) > 55 else prato['nome'])
         msg = await canal_alvo.send(poll=enquete)
         enquetes_criadas.append(msg)
-    
-    macarrao_por_disco = {p['nome'].upper(): p['tem_macarrao'] for p in pratos}
-    
+
+    macarrao_por_disco = {_nfc(p['nome'].upper()): p['tem_macarrao'] for p in pratos}
+    CARDAPIOS_POR_CANAL[canal_alvo.id] = macarrao_por_disco
+
     for msg in enquetes_criadas:
         ENQUETES_PENDENTES[msg.id] = {
             'canal_id': canal_alvo.id,
             'criado_em': datetime.datetime.now(),
             'prazo': 3600,
             'usuarios': USUARIOS_SERVIDOR.copy(),
-            'macarrao_por_disco': macarrao_por_disco
+            'macarrao_por_disco': macarrao_por_disco,
         }
-    
+
     LEMBRETES_ENVIADOS.clear()
     log.info(f"Enquete(s) criada(s) por {ctx.author.name} no servidor {ctx.guild.name} com {len(pratos)} prato(s).")
     await ctx.message.add_reaction("✅")
@@ -345,7 +300,7 @@ async def pedido(ctx):
     if not isinstance(canal_alvo, discord.TextChannel):
         await ctx.send("❌ Erro: Canal inválido.")
         return
-    
+
     hoje = datetime.datetime.now().strftime("%d.%m.%Y")
     data_hoje = datetime.datetime.now().date()
     pedidos_dict = {}
@@ -359,7 +314,6 @@ async def pedido(ctx):
                     prato_nome = answer.text.upper()
                     pedidos_dict[prato_nome] = pedidos_dict.get(prato_nome, 0) + answer.vote_count
                     total_marmitas += answer.vote_count
-
                     async for voter in answer.voters():
                         if voter.id in PREFERENCIAS_SEM:
                             votos_por_usuario.setdefault(voter.id, []).append(prato_nome)
@@ -378,27 +332,53 @@ async def pedido(ctx):
         if dados['canal_id'] == canal_alvo.id:
             macarrao_por_disco.update(dados.get('macarrao_por_disco', {}))
             msg_ids_removidas.append(mid)
-    
+    macarrao_por_disco.update(CARDAPIOS_POR_CANAL.get(canal_alvo.id, {}))
+
     for mid in msg_ids_removidas:
         del ENQUETES_PENDENTES[mid]
-    
+    CARDAPIOS_POR_CANAL.pop(canal_alvo.id, None)
+
+    # Perguntar sobre Reginaldo
+    try:
+        await ctx.send("📋 **Reginaldo vai pedir hoje?** (sim/nao)\n⏰ 30s")
+
+        def check_reginaldo(msg):
+            return msg.author == ctx.author and msg.channel == ctx.channel
+
+        resp = await bot.wait_for('message', timeout=30, check=check_reginaldo)
+
+        if resp.content.lower() in ('sim', 's'):
+            await ctx.send("Qual prato? (ex: Filé de frango acebolado)")
+            resp_prato = await bot.wait_for('message', timeout=30, check=check_reginaldo)
+
+            texto = _nfc(resp_prato.content.upper().strip())
+            prato_encontrado = None
+
+            for key in macarrao_por_disco:
+                if texto in key or key in texto:
+                    prato_encontrado = key
+                    break
+
+            if prato_encontrado:
+                pedidos_dict[prato_encontrado] = pedidos_dict.get(prato_encontrado, 0) + 1
+                total_marmitas += 1
+                await ctx.send(f"✅ Marmita do Reginaldo adicionada! Total: **{total_marmitas:02d}**")
+                log.info(f"Marmita extra do Reginaldo adicionada: {prato_encontrado}")
+            else:
+                await ctx.send(f"❌ Prato `{resp_prato.content}` não encontrado no cardápio de hoje.")
+        else:
+            await ctx.send("✅ OK, seguindo sem Reginaldo.")
+
+    except TimeoutError:
+        await ctx.send("⏰ Tempo esgotado! Seguindo sem Reginaldo.")
+
     lista_formatada = []
     for nome, qtd in pedidos_dict.items():
         nome_upper = nome.upper()
-        tem_macarrao = macarrao_por_disco.get(nome_upper, True)
+        tem_macarrao = macarrao_por_disco.get(_nfc(nome_upper), True)
         lista_formatada.append(montar_linha_prato(nome, qtd, votos_por_usuario, tem_macarrao))
-    
-    corpo_pedido = (
-        "---------------------------------------------------\n"
-        f"Almoço {hoje} -> Pedidos da NETSUL\n"
-        "---------------------------------------------------\n\n"
-        "*--------MARMITAS TAMANHO M---------*\n\n"
-        + "\n".join(lista_formatada) +
-        "\n\n---------------------------------------------------\n"
-        f"Entregar na *NETSUL* -> Total de *{total_marmitas:02d} Marmitas*\n"
-        "RUA DR. CICERO ROSA 589, BAIRRO SAUDE\n"
-        "---------------------------------------------------"
-    )
+
+    corpo_pedido = montar_corpo_pedido(hoje, lista_formatada, total_marmitas)
 
     try:
         with open(HISTORICO_PATH, "a", encoding="utf-8") as f:
@@ -408,44 +388,53 @@ async def pedido(ctx):
         log.error(f"Erro ao salvar arquivo: {e}")
         await ctx.send("⚠️ Erro ao salvar histórico, mas continuando...")
 
-    numero_validado = validar_numero_whatsapp(NUMERO_WPP)
-    if not numero_validado:
+    link_whatsapp = montar_link_whatsapp(NUMERO_WPP, corpo_pedido)
+    if not link_whatsapp:
         await ctx.send("⚠️ Número WhatsApp não configurado ou inválido no .env")
         return
 
-    texto_url = urllib.parse.quote(corpo_pedido)
-    link_whatsapp = f"https://wa.me/{numero_validado}?text={texto_url}"
-
+    link_cobranca = montar_link_cobranca(total_marmitas)
     log.info(f"Pedido de {total_marmitas} marmita(s) registrado por {ctx.author.name} no servidor {ctx.guild.name}.")
-    await ctx.send(f"📊 **Pedido Consolidado!** Total: **{total_marmitas:02d}** marmitas.\n"
-                   f"👉 [CLIQUE PARA ENVIAR NO WHATSAPP]({link_whatsapp})")
+
+    if link_cobranca:
+        await ctx.send(f"📊 **Pedido Consolidado!** Total: **{total_marmitas:02d}** marmitas.\n"
+                       f"👉 [ENVIAR PEDIDO]({link_whatsapp})\n"
+                       f"💰 [ENVIAR COBRANÇA]({link_cobranca})")
+    else:
+        await ctx.send(f"📊 **Pedido Consolidado!** Total: **{total_marmitas:02d}** marmitas.\n"
+                       f"👉 [CLIQUE PARA ENVIAR NO WHATSAPP]({link_whatsapp})")
 
 
 @bot.command(aliases=['ajuda', 'comandos', 'cmds'])
 async def help_bot(ctx):
     embed = discord.Embed(
         title="🍴 Bot Marmita - Comandos",
-        color=discord.Color.blue()
+        color=discord.Color.blue(),
     )
     embed.add_field(
         name="!almoco / !cardapio",
         value="Cria enquete com os pratos do cardápio",
-        inline=False
+        inline=False,
     )
     embed.add_field(
         name="!pedido / !fechar",
         value="Fecha a votação e gera pedido para WhatsApp",
-        inline=False
+        inline=False,
     )
     embed.add_field(
         name="!pref",
         value="Lista restrições alimentares ativas",
-        inline=False
+        inline=False,
+    )
+    embed.add_field(
+        name="!usuarios",
+        value="Lista usuarios cadastrados ativos e nao ativos",
+        inline=False,
     )
     embed.add_field(
         name="!status",
         value="Mostra status do bot",
-        inline=False
+        inline=False,
     )
     await ctx.send(embed=embed)
 
@@ -455,9 +444,17 @@ async def ver_preferencias(ctx):
     if not PREFERENCIAS_SEM:
         await ctx.send("📋 Nenhuma restrição configurada.")
         return
-    
+
     lista = [f"<@{uid}> → SEM {rest}" for uid, rest in PREFERENCIAS_SEM.items()]
     await ctx.send("📋 **Restrições ativas:**\n" + "\n".join(lista))
+
+
+@bot.command(name='usuarios')
+async def listar_usuarios(ctx):
+    config_atual = carregar_config(CONFIG_PATH, logger=log)
+    mensagem = montar_lista_usuarios(config_atual)
+    for parte in dividir_mensagem(mensagem):
+        await ctx.send(parte)
 
 
 @bot.command(aliases=['status'])
@@ -475,32 +472,18 @@ async def status_bot(ctx):
 @bot.command(aliases=['reload', 'recarregar'])
 async def recarregar_config(ctx):
     global CONFIG, PREFERENCIAS_SEM, USUARIOS_SERVIDOR, LIMITE_MENSAGENS, ENQUETE_DURACAO, TOTAL_MAXIMO
-    
-    nova_config = carregar_config()
-    nova_preferencias = {int(k): v for k, v in nova_config.get("preferencias_sem", {}).items()}
-    
-    CONFIG = nova_config
-    PREFERENCIAS_SEM = nova_preferencias
-    USUARIOS_SERVIDOR = {int(id) for id in nova_config.get("usuarios_monitoramento", [])}
-    LIMITE_MENSAGENS = nova_config.get("limite_mensagens", 100)
-    ENQUETE_DURACAO = nova_config.get("enquete_duracao_horas", 4)
-    TOTAL_MAXIMO = nova_config.get("total_maximo_marmitas", 200)
-    
+    CONFIG, PREFERENCIAS_SEM, USUARIOS_SERVIDOR, LIMITE_MENSAGENS, ENQUETE_DURACAO, TOTAL_MAXIMO = carregar_constantes_config()
     await ctx.send("✅ Configurações recarregadas!")
 
 
-# ═══════════════════════════════════════════════════════════════════
-# 8. INICIALIZAÇÃO
-# ═══════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
     if not TOKEN:
         log.error("❌ DISCORD_TOKEN não encontrado no arquivo .env")
         exit(1)
-    
+
     numero_validado = validar_numero_whatsapp(NUMERO_WPP)
     if not numero_validado:
         log.warning("⚠️ NUMERO_MARMITA não configurado ou inválido no .env")
-    
+
     log.info(f"📋 {len(USUARIOS_SERVIDOR)} usuários monitorados para lembretes")
-    
     bot.run(TOKEN, reconnect=True)

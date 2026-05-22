@@ -11,11 +11,13 @@ a = Analysis(
     [os.path.join(project_root, 'src', 'interface.py')],
     pathex=[project_root],
     binaries=[],
+    # Distribuição interna: inclui credenciais/config locais no pacote gerado.
+    # Remova estes itens antes de compartilhar o executável publicamente.
     datas=[
         (os.path.join(project_root, '.env'), '.'),
         (os.path.join(project_root, 'config'), 'config'),
     ],
-    hiddenimports=['main', 'PIL', 'dashboard', 'flask', 'discord', 'dotenv', 'urllib', 'urllib.parse', 'aiohttp', 'yarl', 'multidict', 'attrs'],
+    hiddenimports=['main', 'cardapio', 'pedido', 'settings', 'whatsapp', 'discord', 'dotenv', 'urllib', 'urllib.parse', 'aiohttp', 'yarl', 'multidict', 'attrs'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

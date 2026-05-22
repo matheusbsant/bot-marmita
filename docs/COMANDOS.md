@@ -37,6 +37,7 @@ Fecha a votação e gera o pedido consolidado para WhatsApp.
 - Lista de pratos com quantidades
 - Observações de restrições (ex: "SEM MACARRÃO")
 - Link do WhatsApp para envio
+- Link de cobrança PIX, quando `NUMERO_CHEF` e `CHAVE_PIX` estiverem configurados
 
 ---
 
@@ -65,8 +66,6 @@ Mostra o status completo do bot.
 - Quantidade de servidores
 - Quantidade de canais
 - Número de restrições ativas
-- Roles permitidos
-- Usuários permitidos
 - Limite de mensagens
 - Status do WhatsApp
 
@@ -82,10 +81,6 @@ Recarrega as configurações do arquivo `config.json` sem reiniciar o bot.
 !reload
 ```
 
-**Requer:**
-- Estar na lista de `usuarios_permitidos` OU
-- Ter uma das `roles_permitidos`
-
 ---
 
 ## Configurações (`config.json`)
@@ -96,19 +91,6 @@ Recarrega as configurações do arquivo `config.json` sem reiniciar o bot.
     "123456789": "MACARRÃO",
     "987654321": "FEIJÃO"
 }
-```
-
-### Termos Restritos
-```json
-"termos_restritos": {
-    "MACARRÃO": ["macarrão", "macarrao", "espaguete", "talharim", "nhoque"]
-}
-```
-
-### Permissões
-```json
-"roles_permitidos": ["Admin", "Gestor", "RH"],
-"usuarios_permitidos": ["123456789"]
 ```
 
 ### Limites
@@ -123,5 +105,17 @@ Recarrega as configurações do arquivo `config.json` sem reiniciar o bot.
 ## Requisitos
 
 - **Discord Token** configurado no `.env`
-- **ID do canal** configurado no `.env`
 - **Número WhatsApp** configurado no `.env`
+- **PIX e número do responsável** configurados no `.env`, caso queira gerar o link de cobrança
+
+### Variáveis de ambiente
+```env
+DISCORD_TOKEN=seu_token_do_bot
+NUMERO_MARMITA=5511999999999
+NUMERO_CHEF=5511988887777
+CHAVE_PIX=sua_chave_pix
+NOME_PIX=IARA SANTANA
+VALOR_MARMITA=18
+```
+
+Se `VALOR_MARMITA` estiver ausente ou inválido, o bot usa `18`. O link de cobrança só é gerado quando `NUMERO_CHEF` é válido e `CHAVE_PIX` está preenchida.

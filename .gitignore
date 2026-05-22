@@ -42,3 +42,4 @@ desktop.ini
 
 # Executável compilado (gerar com pyinstaller)
 # dist/BotMarmita/
+dist_atualizado/
