@@ -26,10 +26,10 @@ NUMERO_MARMITA=5511999999999
 NUMERO_CHEF=5511988887777
 CHAVE_PIX=sua_chave_pix
 NOME_PIX=IARA SANTANA
-VALOR_MARMITA=18
+VALOR_MARMITA=19
 ```
 
-As variáveis `NUMERO_CHEF`, `CHAVE_PIX`, `NOME_PIX` e `VALOR_MARMITA` controlam o link opcional de cobrança PIX. A cobrança só é gerada quando `NUMERO_CHEF` é válido e `CHAVE_PIX` está preenchida. Se `VALOR_MARMITA` for inválido, o valor padrão usado é `18`.
+As variáveis `NUMERO_CHEF`, `CHAVE_PIX`, `NOME_PIX` e `VALOR_MARMITA` controlam o link opcional de cobrança PIX. A cobrança só é gerada quando `NUMERO_CHEF` é válido e `CHAVE_PIX` está preenchida. Se `VALOR_MARMITA` for inválido, o valor padrão usado é `19`.
 
 ### 3. Configure o `config.json`
 

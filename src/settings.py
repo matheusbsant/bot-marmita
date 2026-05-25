@@ -6,7 +6,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-VALOR_MARMITA_PADRAO = 18
+VALOR_MARMITA_PADRAO = 19
 FROZEN = getattr(sys, 'frozen', False)
 
 if FROZEN:

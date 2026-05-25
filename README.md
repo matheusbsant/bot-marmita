@@ -78,10 +78,10 @@ NUMERO_MARMITA=5511999999999
 NUMERO_CHEF=5511988887777
 CHAVE_PIX=sua_chave_pix
 NOME_PIX=IARA SANTANA
-VALOR_MARMITA=18
+VALOR_MARMITA=19
 ```
 
-`NUMERO_CHEF`, `CHAVE_PIX`, `NOME_PIX` e `VALOR_MARMITA` são usados para gerar o link de cobrança por WhatsApp. O link de cobrança só aparece quando `NUMERO_CHEF` é válido e `CHAVE_PIX` está preenchida. Se `VALOR_MARMITA` estiver ausente ou inválido, o bot usa `18`.
+`NUMERO_CHEF`, `CHAVE_PIX`, `NOME_PIX` e `VALOR_MARMITA` são usados para gerar o link de cobrança por WhatsApp. O link de cobrança só aparece quando `NUMERO_CHEF` é válido e `CHAVE_PIX` está preenchida. Se `VALOR_MARMITA` estiver ausente ou inválido, o bot usa `19`.
 
 ### 2. Arquivo `config/config.json`
 
