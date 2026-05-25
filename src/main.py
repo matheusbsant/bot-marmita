@@ -48,6 +48,10 @@ def _nfc(text: str) -> str:
     return unicodedata.normalize('NFC', text)
 
 
+def _sem_acento(text: str) -> str:
+    return unicodedata.normalize('NFD', text).encode('ascii', 'ignore').decode('ascii')
+
+
 VALOR_MARMITA = carregar_valor_marmita(logger=log)
 
 
@@ -291,7 +295,7 @@ async def almoco(ctx, *, mensagem_copiada: str):
         msg = await canal_alvo.send(poll=enquete)
         enquetes_criadas.append(msg)
 
-    macarrao_por_disco = {_nfc(p['nome'].upper()): p['tem_macarrao'] for p in pratos}
+    macarrao_por_disco = {_sem_acento(_nfc(p['nome'].upper())): p['tem_macarrao'] for p in pratos}
     CARDAPIOS_POR_CANAL[canal_alvo.id] = macarrao_por_disco
 
     for msg in enquetes_criadas:
@@ -362,24 +366,28 @@ async def pedido(ctx):
         resp = await bot.wait_for('message', timeout=30, check=check_reginaldo)
 
         if resp.content.lower() in ('sim', 's'):
-            await ctx.send("Qual prato? (ex: Filé de frango acebolado)")
-            resp_prato = await bot.wait_for('message', timeout=30, check=check_reginaldo)
+            for tentativa in range(3):
+                await ctx.send(f"Qual prato? (ex: Filé de frango acebolado) {'' if tentativa == 0 else f'- Tentativa {tentativa+1}/3'}")
+                resp_prato = await bot.wait_for('message', timeout=30, check=check_reginaldo)
 
-            texto = _nfc(resp_prato.content.upper().strip())
-            prato_encontrado = None
+                texto = _sem_acento(_nfc(resp_prato.content.upper().strip()))
+                prato_encontrado = None
 
-            for key in macarrao_por_disco:
-                if texto in key or key in texto:
-                    prato_encontrado = key
+                for key in macarrao_por_disco:
+                    if texto in key or key in texto:
+                        prato_encontrado = key
+                        break
+
+                if prato_encontrado:
+                    pedidos_dict[prato_encontrado] = pedidos_dict.get(prato_encontrado, 0) + 1
+                    total_marmitas += 1
+                    await ctx.send(f"✅ Marmita do Reginaldo adicionada! Total: **{total_marmitas:02d}**")
+                    log.info(f"Marmita extra do Reginaldo adicionada: {prato_encontrado}")
                     break
-
-            if prato_encontrado:
-                pedidos_dict[prato_encontrado] = pedidos_dict.get(prato_encontrado, 0) + 1
-                total_marmitas += 1
-                await ctx.send(f"✅ Marmita do Reginaldo adicionada! Total: **{total_marmitas:02d}**")
-                log.info(f"Marmita extra do Reginaldo adicionada: {prato_encontrado}")
+                if tentativa < 2:
+                    await ctx.send(f"❌ Prato não encontrado. Tente novamente ({tentativa+2}/3).")
             else:
-                await ctx.send(f"❌ Prato `{resp_prato.content}` não encontrado no cardápio de hoje.")
+                await ctx.send("❌ 3 tentativas esgotadas! Finalizando sem Reginaldo.")
         else:
             await ctx.send("✅ OK, seguindo sem Reginaldo.")
 
@@ -389,7 +397,9 @@ async def pedido(ctx):
     lista_formatada = []
     for nome, qtd in pedidos_dict.items():
         nome_upper = nome.upper()
-        tem_macarrao = macarrao_por_disco.get(_nfc(nome_upper), True)
+        tem_macarrao = macarrao_por_disco.get(_sem_acento(_nfc(nome_upper)))
+        if tem_macarrao is None:
+            tem_macarrao = macarrao_por_disco.get(_nfc(nome_upper), True)
         lista_formatada.append(montar_linha_prato(nome, qtd, votos_por_usuario, tem_macarrao))
 
     corpo_pedido = montar_corpo_pedido(hoje, lista_formatada, total_marmitas)
