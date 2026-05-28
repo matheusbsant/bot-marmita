@@ -150,10 +150,45 @@ intents.reactions = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 
+async def recuperar_enquetes():
+    for guild in bot.guilds:
+        for channel in guild.text_channels:
+            async for message in channel.history(limit=LIMITE_MENSAGENS):
+                if message.author != bot.user:
+                    continue
+                if not message.poll or message.poll.is_finalized():
+                    continue
+                if message.id in ENQUETES_PENDENTES:
+                    continue
+
+                macarrao_por_disco = {
+                    _sem_acento(_nfc(a.text.upper())): True
+                    for a in message.poll.answers
+                }
+
+                ENQUETES_PENDENTES[message.id] = {
+                    'canal_id': channel.id,
+                    'criado_em': message.created_at,
+                    'prazo': 3600,
+                    'usuarios': USUARIOS_SERVIDOR.copy(),
+                    'macarrao_por_disco': macarrao_por_disco,
+                }
+                log.info(f"Enquete {message.id} recuperada no canal #{channel.name} ({guild.name})")
+
+    agora = datetime.datetime.now()
+    for dados in ENQUETES_PENDENTES.values():
+        decorrido = (agora - dados['criado_em']).total_seconds()
+        if decorrido >= 3600:
+            LEMBRETES_ENVIADOS[dados['canal_id']] = 2
+        elif decorrido >= 1800:
+            LEMBRETES_ENVIADOS[dados['canal_id']] = 1
+
+
 @bot.event
 async def on_ready():
     for guild in bot.guilds:
         log.info(f"✅ SISTEMA NETSUL ATIVO: {bot.user} | Servidor: {guild.name} | ID: {guild.id}")
+    await recuperar_enquetes()
     if not reconectar.is_running():
         reconectar.start()
     if not verificar_votacao.is_running():
