@@ -202,7 +202,8 @@ async def verificar_votacao():
                     except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
                         log.warning(f"Não foi possível ler votos da enquete {mid}: {e}")
 
-            usuarios_nao_votaram = dados['usuarios'] - votos_usuarios
+            usuarios_relevantes = dados['usuarios'] & USUARIOS_SERVIDOR
+            usuarios_nao_votaram = usuarios_relevantes - votos_usuarios
             nivel_atual = LEMBRETES_ENVIADOS.get(canal_id, 0)
 
             if usuarios_nao_votaram:
