@@ -6,6 +6,7 @@
 """
 import asyncio
 import datetime
+import json
 import logging
 import traceback
 import unicodedata
@@ -73,6 +74,42 @@ CONFIG, PREFERENCIAS_SEM, USUARIOS_SERVIDOR, LIMITE_MENSAGENS, ENQUETE_DURACAO, 
 ENQUETES_PENDENTES = {}
 LEMBRETES_ENVIADOS: dict[int, int] = {}
 CARDAPIOS_POR_CANAL = {}
+CARDAPIO_CACHE_PATH = BASE_DIR / "data" / "cardapio_cache.json"
+
+
+def _salvar_cache_cardapio(canal_id: int, pratos: list[dict]):
+    try:
+        CARDAPIO_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        cache = {}
+        if CARDAPIO_CACHE_PATH.exists():
+            cache = json.loads(CARDAPIO_CACHE_PATH.read_text(encoding="utf-8"))
+        cache[str(canal_id)] = [{"nome": p["nome"], "tem_macarrao": p["tem_macarrao"]} for p in pratos]
+        CARDAPIO_CACHE_PATH.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        log.warning(f"Não foi possível salvar cache do cardápio: {e}")
+
+
+def _carregar_cache_cardapio(canal_id: int) -> dict[str, bool]:
+    try:
+        if not CARDAPIO_CACHE_PATH.exists():
+            return {}
+        cache = json.loads(CARDAPIO_CACHE_PATH.read_text(encoding="utf-8"))
+        pratos_canal = cache.get(str(canal_id), [])
+        return {_sem_acento(_nfc(p["nome"].upper())): p["tem_macarrao"] for p in pratos_canal}
+    except Exception as e:
+        log.warning(f"Não foi possível carregar cache do cardápio: {e}")
+        return {}
+
+
+def _limpar_cache_cardapio(canal_id: int):
+    try:
+        if not CARDAPIO_CACHE_PATH.exists():
+            return
+        cache = json.loads(CARDAPIO_CACHE_PATH.read_text(encoding="utf-8"))
+        cache.pop(str(canal_id), None)
+        CARDAPIO_CACHE_PATH.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        log.warning(f"Não foi possível limpar cache do cardápio: {e}")
 
 
 def montar_linha_prato(prato: str, qtd: int, votos_por_usuario: dict, tem_macarrao: bool = True) -> str:
@@ -162,10 +199,7 @@ async def recuperar_enquetes():
                 if message.id in ENQUETES_PENDENTES:
                     continue
 
-                macarrao_por_disco = {
-                    _sem_acento(_nfc(a.text.upper())): True
-                    for a in message.poll.answers
-                }
+                macarrao_por_disco = _carregar_cache_cardapio(channel.id)
 
                 ENQUETES_PENDENTES[message.id] = {
                     'canal_id': channel.id,
@@ -337,6 +371,7 @@ async def almoco(ctx, *, mensagem_copiada: str):
 
     macarrao_por_disco = {_sem_acento(_nfc(p['nome'].upper())): p['tem_macarrao'] for p in pratos}
     CARDAPIOS_POR_CANAL[canal_alvo.id] = macarrao_por_disco
+    _salvar_cache_cardapio(canal_alvo.id, pratos)
 
     for msg in enquetes_criadas:
         ENQUETES_PENDENTES[msg.id] = {
@@ -395,6 +430,7 @@ async def pedido(ctx):
     for mid in msg_ids_removidas:
         del ENQUETES_PENDENTES[mid]
     CARDAPIOS_POR_CANAL.pop(canal_alvo.id, None)
+    _limpar_cache_cardapio(canal_alvo.id)
 
     # Perguntar sobre Reginaldo
     try:
