@@ -7,6 +7,7 @@
 import asyncio
 import datetime
 import logging
+import traceback
 import unicodedata
 
 import discord
@@ -168,7 +169,7 @@ async def recuperar_enquetes():
 
                 ENQUETES_PENDENTES[message.id] = {
                     'canal_id': channel.id,
-                    'criado_em': message.created_at,
+                    'criado_em': message.created_at.replace(tzinfo=None),
                     'prazo': 3600,
                     'usuarios': USUARIOS_SERVIDOR.copy(),
                     'macarrao_por_disco': macarrao_por_disco,
@@ -188,7 +189,10 @@ async def recuperar_enquetes():
 async def on_ready():
     for guild in bot.guilds:
         log.info(f"✅ SISTEMA NETSUL ATIVO: {bot.user} | Servidor: {guild.name} | ID: {guild.id}")
-    await recuperar_enquetes()
+    try:
+        await recuperar_enquetes()
+    except Exception as e:
+        log.error(f"Erro ao recuperar enquetes: {e}")
     if not reconectar.is_running():
         reconectar.start()
     if not verificar_votacao.is_running():
@@ -299,7 +303,7 @@ async def on_disconnect():
 
 @bot.event
 async def on_error(event, *args, **kwargs):
-    log.error(f"Erro no evento {event}: {args}, {kwargs}")
+    log.error(f"Erro no evento {event}: {traceback.format_exc()}")
 
 
 @bot.command(aliases=['almoço', 'cardapio', 'cardápio'])
