@@ -221,6 +221,15 @@ async def recuperar_enquetes():
                 if message.id in processadas:
                     continue
 
+                if message.poll and USUARIOS_SERVIDOR:
+                    votos = set()
+                    for answer in message.poll.answers:
+                        async for voter in answer.voters():
+                            votos.add(voter.id)
+                    if votos and USUARIOS_SERVIDOR.issubset(votos):
+                        log.info(f"Enquete {message.id} ignorada — todos os usuários já votaram")
+                        continue
+
                 macarrao_por_disco = _carregar_cache_cardapio(channel.id)
 
                 ENQUETES_PENDENTES[message.id] = {
