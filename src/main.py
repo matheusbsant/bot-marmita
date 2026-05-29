@@ -456,9 +456,11 @@ async def pedido(ctx):
     pedidos_dict = {}
     votos_por_usuario = {}
     total_marmitas = 0
+    msg_ids_encontradas: list[int] = []
 
     async for message in canal_alvo.history(limit=LIMITE_MENSAGENS):
         if message.poll and message.created_at.date() == data_hoje and message.author == bot.user:
+            msg_ids_encontradas.append(message.id)
             for answer in message.poll.answers:
                 if answer.vote_count > 0:
                     prato_nome = answer.text.upper()
@@ -496,8 +498,15 @@ async def pedido(ctx):
         del ENQUETES_PENDENTES[mid]
     CARDAPIOS_POR_CANAL.pop(canal_alvo.id, None)
     _limpar_cache_cardapio(canal_alvo.id)
-    if msg_ids_removidas:
-        _salvar_enquetes_processadas_por_canal(canal_alvo.id, msg_ids_removidas)
+    if msg_ids_encontradas:
+        _salvar_enquetes_processadas_por_canal(canal_alvo.id, msg_ids_encontradas)
+        for mid in msg_ids_encontradas:
+            try:
+                msg = await canal_alvo.fetch_message(mid)
+                if msg.poll and not msg.poll.is_finalized():
+                    await msg.poll.end()
+            except Exception:
+                pass
 
     # Perguntar sobre Reginaldo
     removidos_reginaldo: dict[str, dict[str, int]] = {}
