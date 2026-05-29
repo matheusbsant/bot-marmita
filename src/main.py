@@ -75,6 +75,7 @@ ENQUETES_PENDENTES = {}
 LEMBRETES_ENVIADOS: dict[int, int] = {}
 CARDAPIOS_POR_CANAL = {}
 CARDAPIO_CACHE_PATH = BASE_DIR / "data" / "cardapio_cache.json"
+ENQUETES_PROCS_PATH = BASE_DIR / "data" / "enquetes_processadas.json"
 
 
 def _salvar_cache_cardapio(canal_id: int, pratos: list[dict]):
@@ -110,6 +111,24 @@ def _limpar_cache_cardapio(canal_id: int):
         CARDAPIO_CACHE_PATH.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception as e:
         log.warning(f"Não foi possível limpar cache do cardápio: {e}")
+
+
+def _carregar_enquetes_processadas() -> set[int]:
+    try:
+        if not ENQUETES_PROCS_PATH.exists():
+            return set()
+        return set(json.loads(ENQUETES_PROCS_PATH.read_text(encoding="utf-8")))
+    except Exception as e:
+        log.warning(f"Não foi possível carregar enquetes processadas: {e}")
+        return set()
+
+
+def _salvar_enquetes_processadas(ids: set[int]):
+    try:
+        ENQUETES_PROCS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        ENQUETES_PROCS_PATH.write_text(json.dumps(list(ids)), encoding="utf-8")
+    except Exception as e:
+        log.warning(f"Não foi possível salvar enquetes processadas: {e}")
 
 
 def montar_linha_prato(prato: str, qtd: int, votos_por_usuario: dict, tem_macarrao: bool = True, extra_restricoes: dict[str, int] | None = None) -> str:
@@ -189,6 +208,7 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 
 async def recuperar_enquetes():
+    processadas = _carregar_enquetes_processadas()
     for guild in bot.guilds:
         for channel in guild.text_channels:
             async for message in channel.history(limit=LIMITE_MENSAGENS):
@@ -197,6 +217,8 @@ async def recuperar_enquetes():
                 if not message.poll or message.poll.is_finalized():
                     continue
                 if message.id in ENQUETES_PENDENTES:
+                    continue
+                if message.id in processadas:
                     continue
 
                 macarrao_por_disco = _carregar_cache_cardapio(channel.id)
@@ -431,6 +453,10 @@ async def pedido(ctx):
         del ENQUETES_PENDENTES[mid]
     CARDAPIOS_POR_CANAL.pop(canal_alvo.id, None)
     _limpar_cache_cardapio(canal_alvo.id)
+    if msg_ids_removidas:
+        processadas = _carregar_enquetes_processadas()
+        processadas.update(msg_ids_removidas)
+        _salvar_enquetes_processadas(processadas)
 
     # Perguntar sobre Reginaldo
     removidos_reginaldo: dict[str, dict[str, int]] = {}
