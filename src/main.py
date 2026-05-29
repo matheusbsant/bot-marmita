@@ -117,18 +117,43 @@ def _carregar_enquetes_processadas() -> set[int]:
     try:
         if not ENQUETES_PROCS_PATH.exists():
             return set()
-        return set(json.loads(ENQUETES_PROCS_PATH.read_text(encoding="utf-8")))
+        dados = json.loads(ENQUETES_PROCS_PATH.read_text(encoding="utf-8"))
+        if isinstance(dados, list):
+            return set(dados)
+        result = set()
+        for ids in dados.values():
+            result.update(ids)
+        return result
     except Exception as e:
         log.warning(f"Não foi possível carregar enquetes processadas: {e}")
         return set()
 
 
-def _salvar_enquetes_processadas(ids: set[int]):
+def _salvar_enquetes_processadas_por_canal(canal_id: int, ids: list[int]):
     try:
         ENQUETES_PROCS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        ENQUETES_PROCS_PATH.write_text(json.dumps(list(ids)), encoding="utf-8")
+        dados = {}
+        if ENQUETES_PROCS_PATH.exists():
+            dados = json.loads(ENQUETES_PROCS_PATH.read_text(encoding="utf-8"))
+            if isinstance(dados, list):
+                dados = {}
+        dados[str(canal_id)] = ids
+        ENQUETES_PROCS_PATH.write_text(json.dumps(dados), encoding="utf-8")
     except Exception as e:
         log.warning(f"Não foi possível salvar enquetes processadas: {e}")
+
+
+def _limpar_enquetes_processadas_por_canal(canal_id: int):
+    try:
+        if not ENQUETES_PROCS_PATH.exists():
+            return
+        dados = json.loads(ENQUETES_PROCS_PATH.read_text(encoding="utf-8"))
+        if isinstance(dados, list):
+            dados = {}
+        dados.pop(str(canal_id), None)
+        ENQUETES_PROCS_PATH.write_text(json.dumps(dados), encoding="utf-8")
+    except Exception as e:
+        log.warning(f"Não foi possível limpar enquetes processadas: {e}")
 
 
 def montar_linha_prato(prato: str, qtd: int, votos_por_usuario: dict, tem_macarrao: bool = True, extra_restricoes: dict[str, int] | None = None) -> str:
@@ -403,6 +428,7 @@ async def almoco(ctx, *, mensagem_copiada: str):
     macarrao_por_disco = {_sem_acento(_nfc(p['nome'].upper())): p['tem_macarrao'] for p in pratos}
     CARDAPIOS_POR_CANAL[canal_alvo.id] = macarrao_por_disco
     _salvar_cache_cardapio(canal_alvo.id, pratos)
+    _limpar_enquetes_processadas_por_canal(canal_alvo.id)
 
     for msg in enquetes_criadas:
         ENQUETES_PENDENTES[msg.id] = {
@@ -463,9 +489,7 @@ async def pedido(ctx):
     CARDAPIOS_POR_CANAL.pop(canal_alvo.id, None)
     _limpar_cache_cardapio(canal_alvo.id)
     if msg_ids_removidas:
-        processadas = _carregar_enquetes_processadas()
-        processadas.update(msg_ids_removidas)
-        _salvar_enquetes_processadas(processadas)
+        _salvar_enquetes_processadas_por_canal(canal_alvo.id, msg_ids_removidas)
 
     # Perguntar sobre Reginaldo
     removidos_reginaldo: dict[str, dict[str, int]] = {}
