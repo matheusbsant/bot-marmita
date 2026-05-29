@@ -15,7 +15,7 @@ def limpar_cardapio(texto: str) -> list[dict]:
     for negrito in texto_negrito:
         prato_nome = negrito.strip()
 
-        if len(prato_nome) <= 5 or len(prato_nome) > 65:
+        if len(prato_nome) <= 5 or len(prato_nome) > 150:
             continue
         if any(_nfc(p['nome']) == _nfc(prato_nome) for p in pratos_unicos):
             continue
