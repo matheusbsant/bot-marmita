@@ -112,8 +112,8 @@ def _limpar_cache_cardapio(canal_id: int):
         log.warning(f"Não foi possível limpar cache do cardápio: {e}")
 
 
-def montar_linha_prato(prato: str, qtd: int, votos_por_usuario: dict, tem_macarrao: bool = True) -> str:
-    return montar_linha_prato_pedido(prato, qtd, votos_por_usuario, PREFERENCIAS_SEM, tem_macarrao)
+def montar_linha_prato(prato: str, qtd: int, votos_por_usuario: dict, tem_macarrao: bool = True, extra_restricoes: dict[str, int] | None = None) -> str:
+    return montar_linha_prato_pedido(prato, qtd, votos_por_usuario, PREFERENCIAS_SEM, tem_macarrao, extra_restricoes)
 
 
 def montar_link_cobranca(total_marmitas: int) -> str | None:
@@ -433,6 +433,7 @@ async def pedido(ctx):
     _limpar_cache_cardapio(canal_alvo.id)
 
     # Perguntar sobre Reginaldo
+    removidos_reginaldo: dict[str, dict[str, int]] = {}
     try:
         await ctx.send("📋 **Reginaldo vai pedir hoje?** (sim/nao)\n⏰ 30s")
 
@@ -459,6 +460,23 @@ async def pedido(ctx):
                     total_marmitas += 1
                     await ctx.send(f"✅ Marmita do Reginaldo adicionada! Total: **{total_marmitas:02d}**")
                     log.info(f"Marmita extra do Reginaldo adicionada: {prato_encontrado}")
+
+                    try:
+                        await ctx.send("🧀 **Reginaldo vai tirar algum acompanhamento?** (sim/nao)\n⏰ 15s")
+                        resp_rem = await bot.wait_for('message', timeout=15, check=check_reginaldo)
+                        if resp_rem.content.lower() in ('sim', 's'):
+                            await ctx.send("📝 **Qual acompanhamento?** (ex: Macarrão)")
+                            resp_acomp = await bot.wait_for('message', timeout=15, check=check_reginaldo)
+                            acomp = resp_acomp.content.strip()
+                            if acomp not in removidos_reginaldo:
+                                removidos_reginaldo[prato_encontrado] = {}
+                            removidos_reginaldo[prato_encontrado][acomp] = removidos_reginaldo[prato_encontrado].get(acomp, 0) + 1
+                            log.info(f"Reginaldo sem {acomp} no prato {prato_encontrado}")
+                        else:
+                            await ctx.send("✅ OK, mantendo acompanhamentos padrão.")
+                    except TimeoutError:
+                        await ctx.send("⏰ OK, seguindo sem remoção.")
+
                     break
                 if tentativa < 2:
                     await ctx.send(f"❌ Prato não encontrado. Tente novamente ({tentativa+2}/3).")
@@ -476,7 +494,13 @@ async def pedido(ctx):
         tem_macarrao = macarrao_por_disco.get(_sem_acento(_nfc(nome_upper)))
         if tem_macarrao is None:
             tem_macarrao = macarrao_por_disco.get(_nfc(nome_upper), True)
-        lista_formatada.append(montar_linha_prato(nome, qtd, votos_por_usuario, tem_macarrao))
+        extra = None
+        nk = _sem_acento(_nfc(nome_upper))
+        for dish_key, restricoes in removidos_reginaldo.items():
+            if _sem_acento(_nfc(dish_key.upper())) == nk:
+                extra = restricoes
+                break
+        lista_formatada.append(montar_linha_prato(nome, qtd, votos_por_usuario, tem_macarrao, extra))
 
     corpo_pedido = montar_corpo_pedido(hoje, lista_formatada, total_marmitas)
 
