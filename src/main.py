@@ -17,8 +17,8 @@ from discord.ext import commands, tasks
 from cardapio import limpar_cardapio
 from pedido import montar_corpo_pedido, montar_linha_prato as montar_linha_prato_pedido
 from settings import (
-    BASE_DIR,
     CHAVE_PIX,
+    USER_DATA_DIR,
     CONFIG_PATH,
     HISTORICO_PATH,
     LOG_PATH,
@@ -74,8 +74,8 @@ CONFIG, PREFERENCIAS_SEM, USUARIOS_SERVIDOR, LIMITE_MENSAGENS, ENQUETE_DURACAO, 
 ENQUETES_PENDENTES = {}
 LEMBRETES_ENVIADOS: dict[int, int] = {}
 CARDAPIOS_POR_CANAL = {}
-CARDAPIO_CACHE_PATH = BASE_DIR / "data" / "cardapio_cache.json"
-ENQUETES_PROCS_PATH = BASE_DIR / "data" / "enquetes_processadas.json"
+CARDAPIO_CACHE_PATH = USER_DATA_DIR / "data" / "cardapio_cache.json"
+ENQUETES_PROCS_PATH = USER_DATA_DIR / "data" / "enquetes_processadas.json"
 
 
 def _salvar_cache_cardapio(canal_id: int, pratos: list[dict]):
