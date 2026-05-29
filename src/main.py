@@ -136,7 +136,7 @@ def _salvar_enquetes_processadas_por_canal(canal_id: int, ids: list[int]):
         if ENQUETES_PROCS_PATH.exists():
             dados = json.loads(ENQUETES_PROCS_PATH.read_text(encoding="utf-8"))
             if isinstance(dados, list):
-                dados = {}
+                dados = {"_global": dados}
         dados[str(canal_id)] = ids
         ENQUETES_PROCS_PATH.write_text(json.dumps(dados), encoding="utf-8")
     except Exception as e:
@@ -149,7 +149,7 @@ def _limpar_enquetes_processadas_por_canal(canal_id: int):
             return
         dados = json.loads(ENQUETES_PROCS_PATH.read_text(encoding="utf-8"))
         if isinstance(dados, list):
-            dados = {}
+            dados = {"_global": dados}
         dados.pop(str(canal_id), None)
         ENQUETES_PROCS_PATH.write_text(json.dumps(dados), encoding="utf-8")
     except Exception as e:
