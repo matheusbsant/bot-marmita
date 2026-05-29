@@ -484,6 +484,14 @@ async def pedido(ctx):
             msg_ids_removidas.append(mid)
     macarrao_por_disco.update(CARDAPIOS_POR_CANAL.get(canal_alvo.id, {}))
 
+    if not macarrao_por_disco:
+        async for message in canal_alvo.history(limit=LIMITE_MENSAGENS):
+            if message.poll and message.created_at.date() == data_hoje and message.author == bot.user:
+                for answer in message.poll.answers:
+                    key = _sem_acento(_nfc(answer.text.upper()))
+                    if key not in macarrao_por_disco:
+                        macarrao_por_disco[key] = True
+
     for mid in msg_ids_removidas:
         del ENQUETES_PENDENTES[mid]
     CARDAPIOS_POR_CANAL.pop(canal_alvo.id, None)
