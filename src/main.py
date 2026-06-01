@@ -462,6 +462,7 @@ async def pedido(ctx):
         if message.poll and message.created_at.date() == data_hoje and message.author == bot.user:
             msg_ids_encontradas.append(message.id)
             for answer in message.poll.answers:
+                log.info(f"ENQUETE {message.id} | answer.text={answer.text!r} vote_count={answer.vote_count}")
                 if answer.vote_count > 0:
                     prato_nome = answer.text.upper()
                     pedidos_dict[prato_nome] = pedidos_dict.get(prato_nome, 0) + answer.vote_count
@@ -507,6 +508,8 @@ async def pedido(ctx):
                     await msg.poll.end()
             except Exception:
                 pass
+
+    log.info(f"pedidos_dict final: {pedidos_dict}")
 
     # Perguntar sobre Reginaldo
     removidos_reginaldo: dict[str, dict[str, int]] = {}
